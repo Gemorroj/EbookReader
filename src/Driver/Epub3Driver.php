@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\EbookDriverInterface;
-use EbookReader\EbookMetaInterface;
 use EbookReader\Exception\ParserException;
-use EbookReader\Meta\EpubMeta;
+use EbookReader\Meta\Epub3Meta;
 
 /**
  * @see https://www.w3.org/publishing/epub3/epub-spec.html
@@ -21,22 +20,19 @@ class Epub3Driver implements EbookDriverInterface
         $this->file = $file;
     }
 
-    public function read(): EbookMetaInterface
+    public function read(): Epub3Meta
     {
-        $dom = self::getPackage($this->file);
-        $dom->getElementsByTagName('rootfile');
+        $metadataNode = self::getPackageMetadata($this->file);
 
-        /** @var \DOMElement $metadata */
-        $metadata = $dom->getElementsByTagName('metadata')->item(0);
         /** @var \DOMElement $titleNode */
-        $titleNode = $metadata->getElementsByTagName('title')->item(0);
+        $titleNode = $metadataNode->getElementsByTagName('title')->item(0);
 
-        return new EpubMeta(
+        return new Epub3Meta(
             $titleNode->nodeValue
         );
     }
 
-    protected static function getPackage(string $file): \DOMDocument
+    protected static function getPackageMetadata(string $file): \DOMElement
     {
         $zip = new \ZipArchive();
         $res = $zip->open($file, \ZipArchive::RDONLY);
@@ -52,13 +48,12 @@ class Epub3Driver implements EbookDriverInterface
         }
 
         $domContainer = new \DOMDocument('1.0', 'UTF-8');
-        if (false === @$domContainer->loadXML($container)) { // throws \ValueError for php 8
+        if (false === $domContainer->loadXML($container, \LIBXML_NOENT | \LIBXML_NOERROR)) { // throws \ValueError for php 8
             $zip->close();
             throw new ParserException();
         }
 
-        $list = $domContainer->getElementsByTagName('rootfile');
-        $node = $list->item(0);
+        $node = $domContainer->getElementsByTagName('rootfile')->item(0);
 
         if (!$node || !$node->attributes) {
             $zip->close();
@@ -79,17 +74,23 @@ class Epub3Driver implements EbookDriverInterface
         }
 
         $domPackage = new \DOMDocument('1.0', 'UTF-8');
-        if (false === @$domPackage->loadXML($package)) { // throws \ValueError for php 8
+        if (false === $domPackage->loadXML($package, \LIBXML_NOENT | \LIBXML_NOERROR)) { // throws \ValueError for php 8
             throw new ParserException();
         }
 
-        return $domPackage;
+        /** @var \DOMElement|null $metadataNode */
+        $metadataNode = $domPackage->getElementsByTagName('metadata')->item(0);
+        if (!$metadataNode) {
+            throw new ParserException();
+        }
+
+        return $metadataNode;
     }
 
     public static function isValid(string $file): bool
     {
         try {
-            self::getPackage($file);
+            self::getPackageMetadata($file);
         } catch (\Throwable $e) {
             return false;
         }

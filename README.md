@@ -27,6 +27,7 @@ composer require gemorroj/ebook-reader
 use EbookReader\EbookReaderFactory;
 use EbookReader\Driver\Epub3Driver;
 
+// $ebookReader = EbookReaderFactory::create('file.fb2');
 $ebookReader = EbookReaderFactory::create('file.epub');
 // or $ebookReader = new Epub3Driver('file.epub');
 

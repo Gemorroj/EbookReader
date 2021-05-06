@@ -6,7 +6,7 @@ namespace EbookReader\Meta;
 
 use EbookReader\EbookMetaInterface;
 
-class EpubMeta implements EbookMetaInterface
+class Epub3Meta implements EbookMetaInterface
 {
     private string $title;
 
