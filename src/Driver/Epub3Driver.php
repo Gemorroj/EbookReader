@@ -73,14 +73,13 @@ class Epub3Driver implements EbookDriverInterface
         }
 
         $package = $zip->getFromName($packageName->value);
+        $zip->close();
         if (false === $package) {
-            $zip->close();
             throw new ParserException();
         }
 
         $domPackage = new \DOMDocument('1.0', 'UTF-8');
         if (false === @$domPackage->loadXML($package)) { // throws \ValueError for php 8
-            $zip->close();
             throw new ParserException();
         }
 
