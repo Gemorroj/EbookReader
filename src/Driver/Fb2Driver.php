@@ -43,32 +43,35 @@ class Fb2Driver extends AbstractDriver
         $zip = new \ZipArchive();
         $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
         if (true === $res) {
-            $content = $zip->getFromIndex(0); // read first file
+            $fb2File = $zip->getNameIndex(0); // get first file in archive
             $zip->close();
+            if (false === $fb2File) {
+                throw new ParserException();
+            }
+
+            $file = 'zip://'.$this->getFile().'#'.$fb2File;
         } else {
-            $content = \file_get_contents($this->getFile());
+            $file = $this->getFile();
         }
-        if (false === $content) {
+
+        /** @var \XMLReader|false $reader */
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR); // throws \ValueError for php 8
+        if (!$reader) {
             throw new ParserException();
         }
 
-        $dom = new \DOMDocument('1.0', 'UTF-8');
-        if (false === $dom->loadXML($content, \LIBXML_NOENT | \LIBXML_NOERROR)) { // throws \ValueError for php 8
-            throw new ParserException();
+        while ($reader->read()) {
+            if (\XmlReader::ELEMENT === $reader->nodeType && 'description' === $reader->name) { // first description element
+                /** @var \DOMElement|false $descriptionNode */
+                $descriptionNode = $reader->expand();
+                if (!$descriptionNode) {
+                    throw new ParserException();
+                }
+
+                return $descriptionNode;
+            }
         }
 
-        /** @var \DOMElement|null $fictionBookNode */
-        $fictionBookNode = $dom->getElementsByTagName('FictionBook')->item(0);
-        if (!$fictionBookNode) {
-            throw new ParserException();
-        }
-
-        /** @var \DOMElement|null $descriptionNode */
-        $descriptionNode = $fictionBookNode->getElementsByTagName('description')->item(0);
-        if (!$descriptionNode) {
-            throw new ParserException();
-        }
-
-        return $descriptionNode;
+        throw new ParserException();
     }
 }

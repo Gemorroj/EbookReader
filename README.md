@@ -5,10 +5,6 @@
 [![Continuous Integration](https://github.com/Gemorroj/EbookReader/workflows/Continuous%20Integration/badge.svg?branch=master)](https://github.com/Gemorroj/EbookReader/actions?query=workflow%3A%22Continuous+Integration%22)
 
 
-### In progress...
-- Use https://www.php.net/xmlreader to save memory
-
-
 ### Formats:
 - EPUB
 - MOBI
@@ -16,9 +12,11 @@
 
 
 ### Requirements:
-- PHP >= 7.4
+- PHP >= 7.4.3
 - ext-zip
 - ext-dom
+- ext-xmlreader
+
 
 ### Installation:
 ```bash
