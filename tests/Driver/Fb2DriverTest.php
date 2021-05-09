@@ -46,6 +46,9 @@ class Fb2DriverTest extends TestCase
         $driver->read();
     }
 
+    /**
+     * @return string[][]
+     */
     public function filesProviderFake(): array
     {
         return [
@@ -54,6 +57,9 @@ class Fb2DriverTest extends TestCase
         ];
     }
 
+    /**
+     * @return string[][]
+     */
     public function filesProvider(): array
     {
         return [
