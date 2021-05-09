@@ -13,6 +13,8 @@ use EbookReader\Meta\Fb2Meta;
  */
 class Fb2Driver extends AbstractDriver
 {
+    private ?\DOMElement $fictionBookDescription = null;
+
     public function isValid(): bool
     {
         try {
@@ -40,6 +42,10 @@ class Fb2Driver extends AbstractDriver
 
     protected function getFictionBookDescription(): \DOMElement
     {
+        if ($this->fictionBookDescription) {
+            return $this->fictionBookDescription;
+        }
+
         $zip = new \ZipArchive();
         $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
         if (true === $res) {
@@ -68,7 +74,9 @@ class Fb2Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                return $descriptionNode;
+                $this->fictionBookDescription = $descriptionNode;
+
+                return $this->fictionBookDescription;
             }
         }
 

@@ -12,6 +12,8 @@ use EbookReader\Meta\Epub3Meta;
  */
 class Epub3Driver extends AbstractDriver
 {
+    private ?\DOMElement $packageMetadata = null;
+
     public function isValid(): bool
     {
         try {
@@ -37,6 +39,10 @@ class Epub3Driver extends AbstractDriver
 
     protected function getPackageMetadata(): \DOMElement
     {
+        if ($this->packageMetadata) {
+            return $this->packageMetadata;
+        }
+
         $zip = new \ZipArchive();
         $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
         if (true !== $res) {
@@ -87,6 +93,8 @@ class Epub3Driver extends AbstractDriver
             throw new ParserException();
         }
 
-        return $metadataNode;
+        $this->packageMetadata = $metadataNode;
+
+        return $this->packageMetadata;
     }
 }

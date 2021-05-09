@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace EbookReader\Tests;
 
 use EbookReader\Driver\Epub3Driver;
