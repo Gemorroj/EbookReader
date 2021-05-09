@@ -4,25 +4,28 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\EbookDriverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\Epub3Meta;
 
 /**
  * @see https://www.w3.org/publishing/epub3/epub-spec.html
  */
-class Epub3Driver implements EbookDriverInterface
+class Epub3Driver extends AbstractDriver
 {
-    private string $file;
-
-    public function __construct(string $file)
+    public function isValid(): bool
     {
-        $this->file = $file;
+        try {
+            $this->getPackageMetadata();
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return true;
     }
 
-    public function read(): Epub3Meta
+    public function getMeta(): Epub3Meta
     {
-        $metadataNode = self::getPackageMetadata($this->file);
+        $metadataNode = $this->getPackageMetadata();
 
         /** @var \DOMElement $titleNode */
         $titleNode = $metadataNode->getElementsByTagName('title')->item(0);
@@ -32,10 +35,10 @@ class Epub3Driver implements EbookDriverInterface
         );
     }
 
-    protected static function getPackageMetadata(string $file): \DOMElement
+    protected function getPackageMetadata(): \DOMElement
     {
         $zip = new \ZipArchive();
-        $res = $zip->open($file, \ZipArchive::RDONLY);
+        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
         if (true !== $res) {
             throw new ParserException();
         }
@@ -85,16 +88,5 @@ class Epub3Driver implements EbookDriverInterface
         }
 
         return $metadataNode;
-    }
-
-    public static function isValid(string $file): bool
-    {
-        try {
-            self::getPackageMetadata($file);
-        } catch (\Throwable $e) {
-            return false;
-        }
-
-        return true;
     }
 }

@@ -13,7 +13,8 @@ class MobiDriverTest extends TestCase
      */
     public function testIsValid(string $file): void
     {
-        $result = MobiDriver::isValid($file);
+        $driver = new MobiDriver($file);
+        $result = $driver->isValid();
         self::assertTrue($result);
     }
 
@@ -22,7 +23,8 @@ class MobiDriverTest extends TestCase
      */
     public function testIsValidFake(string $file): void
     {
-        $result = MobiDriver::isValid($file);
+        $driver = new MobiDriver($file);
+        $result = $driver->isValid();
         self::assertFalse($result);
     }
 
@@ -33,7 +35,7 @@ class MobiDriverTest extends TestCase
     {
         self::markTestSkipped('Not implemented');
         $driver = new MobiDriver($file);
-        $meta = $driver->read();
+        $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
     }
 
@@ -45,7 +47,7 @@ class MobiDriverTest extends TestCase
         self::markTestSkipped('Not implemented');
         $driver = new MobiDriver($file);
         $this->expectException(ParserException::class);
-        $driver->read();
+        $driver->getMeta();
     }
 
     /**

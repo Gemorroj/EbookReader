@@ -13,7 +13,8 @@ class Epub3DriverTest extends TestCase
      */
     public function testIsValid(string $file): void
     {
-        $result = Epub3Driver::isValid($file);
+        $driver = new Epub3Driver($file);
+        $result = $driver->isValid();
         self::assertTrue($result);
     }
 
@@ -22,28 +23,29 @@ class Epub3DriverTest extends TestCase
      */
     public function testIsValidFake(string $file): void
     {
-        $result = Epub3Driver::isValid($file);
+        $driver = new Epub3Driver($file);
+        $result = $driver->isValid();
         self::assertFalse($result);
     }
 
     /**
      * @dataProvider filesProvider
      */
-    public function testRead(string $file, string $expectedTitle): void
+    public function testGetMeta(string $file, string $expectedTitle): void
     {
         $driver = new Epub3Driver($file);
-        $meta = $driver->read();
+        $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
     }
 
     /**
      * @dataProvider filesProviderFake
      */
-    public function testReadFake(string $file): void
+    public function testGetMetaFake(string $file): void
     {
         $driver = new Epub3Driver($file);
         $this->expectException(ParserException::class);
-        $driver->read();
+        $driver->getMeta();
     }
 
     /**

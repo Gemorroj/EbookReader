@@ -6,7 +6,7 @@
 
 
 ### In progress...
-- Use `https://www.php.net/manual/ru/ziparchive.getfromname.php` and `https://www.php.net/fread` with configurable buffer to avoid reading all file to memory.
+- Use https://www.php.net/xmlreader to save memory
 
 
 ### Formats:
@@ -31,10 +31,14 @@ composer require gemorroj/ebook-reader
 use EbookReader\EbookReaderFactory;
 use EbookReader\Driver\Epub3Driver;
 
-// $ebookReader = EbookReaderFactory::create('file.fb2');
 $ebookReader = EbookReaderFactory::create('file.epub');
-// or $ebookReader = new Epub3Driver('file.epub');
+$meta = $ebookReader->getMeta();
+print_r($meta); // EbookMetaInterface object
 
-$meta = $ebookReader->read();
-print_r($meta);
+
+$ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException exception
+
+
+$driver = new Epub3Driver('fake.file');
+var_dump($driver->isValid()); // false
 ```

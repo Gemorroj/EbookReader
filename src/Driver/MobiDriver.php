@@ -4,30 +4,17 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\EbookDriverInterface;
 use EbookReader\Meta\MobiMeta;
 
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI
  * @see https://github.com/choccybiccy/mobi
  */
-class MobiDriver implements EbookDriverInterface
+class MobiDriver extends AbstractDriver
 {
-    private string $file;
-
-    public function __construct(string $file)
+    public function isValid(): bool
     {
-        $this->file = $file;
-    }
-
-    public function read(): MobiMeta
-    {
-        throw new \RuntimeException('Not implemented');
-    }
-
-    public static function isValid(string $file): bool
-    {
-        $f = \fopen($file, 'rb');
+        $f = \fopen($this->getFile(), 'rb');
         if (!$f) {
             return false;
         }
@@ -35,5 +22,10 @@ class MobiDriver implements EbookDriverInterface
         $content = \fread($f, 8);
 
         return 'BOOKMOBI' === $content;
+    }
+
+    public function getMeta(): MobiMeta
+    {
+        throw new \RuntimeException('Not implemented');
     }
 }

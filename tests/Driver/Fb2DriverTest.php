@@ -13,7 +13,8 @@ class Fb2DriverTest extends TestCase
      */
     public function testIsValid(string $file): void
     {
-        $result = Fb2Driver::isValid($file);
+        $driver = new Fb2Driver($file);
+        $result = $driver->isValid();
         self::assertTrue($result);
     }
 
@@ -22,28 +23,29 @@ class Fb2DriverTest extends TestCase
      */
     public function testIsValidFake(string $file): void
     {
-        $result = Fb2Driver::isValid($file);
+        $driver = new Fb2Driver($file);
+        $result = $driver->isValid();
         self::assertFalse($result);
     }
 
     /**
      * @dataProvider filesProvider
      */
-    public function testRead(string $file, string $expectedTitle): void
+    public function testGetMeta(string $file, string $expectedTitle): void
     {
         $driver = new Fb2Driver($file);
-        $meta = $driver->read();
+        $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
     }
 
     /**
      * @dataProvider filesProviderFake
      */
-    public function testReadFake(string $file): void
+    public function testGetMetaFake(string $file): void
     {
         $driver = new Fb2Driver($file);
         $this->expectException(ParserException::class);
-        $driver->read();
+        $driver->getMeta();
     }
 
     /**

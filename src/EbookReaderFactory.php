@@ -21,14 +21,17 @@ class EbookReaderFactory
             throw new FileNotReadableException();
         }
 
-        if (Epub3Driver::isValid($file)) {
-            return new Epub3Driver($file);
+        $epub3Driver = new Epub3Driver($file);
+        if ($epub3Driver->isValid()) {
+            return $epub3Driver;
         }
-        if (Fb2Driver::isValid($file)) {
-            return new Fb2Driver($file);
+        $mobiDriver = new MobiDriver($file);
+        if ($mobiDriver->isValid()) {
+            return $mobiDriver;
         }
-        if (MobiDriver::isValid($file)) {
-            return new MobiDriver($file);
+        $fb2Driver = new Fb2Driver($file);
+        if ($fb2Driver->isValid()) {
+            return $fb2Driver;
         }
 
         throw new UnsupportedFormatException();

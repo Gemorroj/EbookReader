@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\EbookDriverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\Fb2Meta;
 
@@ -12,18 +11,22 @@ use EbookReader\Meta\Fb2Meta;
  * @see https://wiki.mobileread.com/wiki/FB2
  * @see http://www.fictionbook.org/index.php/XML_%D1%81%D1%85%D0%B5%D0%BC%D0%B0_FictionBook2.2
  */
-class Fb2Driver implements EbookDriverInterface
+class Fb2Driver extends AbstractDriver
 {
-    private string $file;
-
-    public function __construct(string $file)
+    public function isValid(): bool
     {
-        $this->file = $file;
+        try {
+            $this->getFictionBookDescription();
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return true;
     }
 
-    public function read(): Fb2Meta
+    public function getMeta(): Fb2Meta
     {
-        $descriptionNode = self::getFictionBookDescription($this->file);
+        $descriptionNode = $this->getFictionBookDescription();
 
         /** @var \DOMElement $titleInfoNode */
         $titleInfoNode = $descriptionNode->getElementsByTagName('title-info')->item(0);
@@ -35,15 +38,15 @@ class Fb2Driver implements EbookDriverInterface
         );
     }
 
-    protected static function getFictionBookDescription(string $file): \DOMElement
+    protected function getFictionBookDescription(): \DOMElement
     {
         $zip = new \ZipArchive();
-        $res = $zip->open($file, \ZipArchive::RDONLY);
+        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
         if (true === $res) {
             $content = $zip->getFromIndex(0); // read first file
             $zip->close();
         } else {
-            $content = \file_get_contents($file);
+            $content = \file_get_contents($this->getFile());
         }
         if (false === $content) {
             throw new ParserException();
@@ -67,16 +70,5 @@ class Fb2Driver implements EbookDriverInterface
         }
 
         return $descriptionNode;
-    }
-
-    public static function isValid(string $file): bool
-    {
-        try {
-            self::getFictionBookDescription($file);
-        } catch (\Throwable $e) {
-            return false;
-        }
-
-        return true;
     }
 }
