@@ -4,6 +4,7 @@ namespace EbookReader\Tests;
 
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
+use EbookReader\Driver\MobiDriver;
 use EbookReader\EbookReaderFactory;
 use EbookReader\Exception\UnsupportedFormatException;
 use PHPUnit\Framework\TestCase;
@@ -20,6 +21,12 @@ class EbookReaderFactoryTest extends TestCase
     {
         $epub3 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3.epub');
         self::assertInstanceOf(Epub3Driver::class, $epub3);
+    }
+
+    public function testCreateMobi(): void
+    {
+        $mobi = EbookReaderFactory::create(__DIR__.'/fixtures/mobi/mobi.mobi');
+        self::assertInstanceOf(MobiDriver::class, $mobi);
     }
 
     public function testCreateFake(): void
