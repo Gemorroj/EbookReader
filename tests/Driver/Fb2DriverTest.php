@@ -64,6 +64,7 @@ class Fb2DriverTest extends TestCase
     {
         return [
             [__DIR__.'/../fixtures/fb2/fb2.fb2', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
+            [__DIR__.'/../fixtures/fb2/fb2.zip', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
         ];
     }
 }

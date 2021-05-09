@@ -6,10 +6,14 @@
 
 
 ### In progress...
-- Epub: https://www.w3.org/publishing/epub3/epub-spec.html
-- Mobi: https://wiki.mobileread.com/wiki/MOBI
-- Fb2: https://wiki.mobileread.com/wiki/FB2
-- ...
+- Use `https://www.php.net/manual/ru/ziparchive.getfromname.php` and `https://www.php.net/fread` with configurable buffer to avoid reading all file to memory.
+
+
+### Formats:
+- EPUB
+- MOBI
+- FB2, FB2-ZIP
+
 
 ### Requirements:
 - PHP >= 7.4

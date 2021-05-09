@@ -37,10 +37,20 @@ class Fb2Driver implements EbookDriverInterface
 
     protected static function getFictionBookDescription(string $file): \DOMElement
     {
-        // todo: decrease memory
+        $zip = new \ZipArchive();
+        $res = $zip->open($file, \ZipArchive::RDONLY);
+        if (true === $res) {
+            $content = $zip->getFromIndex(0); // read first file
+            $zip->close();
+        } else {
+            $content = \file_get_contents($file);
+        }
+        if (false === $content) {
+            throw new ParserException();
+        }
 
         $dom = new \DOMDocument('1.0', 'UTF-8');
-        if (false === $dom->load($file, \LIBXML_NOENT | \LIBXML_NOERROR)) { // throws \ValueError for php 8
+        if (false === $dom->loadXML($content, \LIBXML_NOENT | \LIBXML_NOERROR)) { // throws \ValueError for php 8
             throw new ParserException();
         }
 
