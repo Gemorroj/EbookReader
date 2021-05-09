@@ -17,6 +17,12 @@ class EbookReaderFactoryTest extends TestCase
         self::assertInstanceOf(Fb2Driver::class, $fb2);
     }
 
+    public function testCreateFb2Zip(): void
+    {
+        $fb2 = EbookReaderFactory::create(__DIR__.'/fixtures/fb2/fb2.zip');
+        self::assertInstanceOf(Fb2Driver::class, $fb2);
+    }
+
     public function testCreateEpub3(): void
     {
         $epub3 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3.epub');
