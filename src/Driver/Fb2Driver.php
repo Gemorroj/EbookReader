@@ -70,6 +70,7 @@ class Fb2Driver extends AbstractDriver
             if (\XmlReader::ELEMENT === $reader->nodeType && 'description' === $reader->name) { // first description element
                 /** @var \DOMElement|false $descriptionNode */
                 $descriptionNode = $reader->expand();
+                $reader->close();
                 if (!$descriptionNode) {
                     throw new ParserException();
                 }
@@ -80,6 +81,7 @@ class Fb2Driver extends AbstractDriver
             }
         }
 
+        $reader->close();
         throw new ParserException();
     }
 }

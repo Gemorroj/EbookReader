@@ -20,6 +20,7 @@ class MobiDriver extends AbstractDriver
         }
         \fseek($f, 60);
         $content = \fread($f, 8);
+        \fclose($f);
 
         return 'BOOKMOBI' === $content;
     }
