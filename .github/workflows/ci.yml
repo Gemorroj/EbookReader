@@ -54,7 +54,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: dom, zip, libxml
+          extensions: dom, zip, xmlreader, libxml
           coverage: none
           tools: composer:v2
 
