@@ -1,7 +1,7 @@
 # E-book reader
 
-[![License](https://poser.pugx.org/gemorroj/ebookreader/license)](https://packagist.org/packages/gemorroj/ebookreader)
-[![Latest Stable Version](https://poser.pugx.org/gemorroj/ebookreader/v/stable)](https://packagist.org/packages/gemorroj/ebookreader)
+[![License](https://poser.pugx.org/gemorroj/ebook-reader/license)](https://packagist.org/packages/gemorroj/ebook-reader)
+[![Latest Stable Version](https://poser.pugx.org/gemorroj/ebook-reader/v/stable)](https://packagist.org/packages/gemorroj/ebook-reader)
 [![Continuous Integration](https://github.com/Gemorroj/EbookReader/workflows/Continuous%20Integration/badge.svg?branch=master)](https://github.com/Gemorroj/EbookReader/actions?query=workflow%3A%22Continuous+Integration%22)
 
 
