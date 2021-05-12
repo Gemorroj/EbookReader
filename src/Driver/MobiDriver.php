@@ -14,7 +14,7 @@ class MobiDriver extends AbstractDriver
 {
     public function isValid(): bool
     {
-        $f = \fopen($this->getFile(), 'rb');
+        $f = \fopen($this->getFile(), 'r');
         if (!$f) {
             return false;
         }
