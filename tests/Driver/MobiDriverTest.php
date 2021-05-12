@@ -35,7 +35,6 @@ class MobiDriverTest extends TestCase
      */
     public function testRead(string $file, string $expectedTitle): void
     {
-        self::markTestSkipped('Not implemented');
         $driver = new MobiDriver($file);
         $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
@@ -46,7 +45,6 @@ class MobiDriverTest extends TestCase
      */
     public function testReadFake(string $file): void
     {
-        self::markTestSkipped('Not implemented');
         $driver = new MobiDriver($file);
         $this->expectException(ParserException::class);
         $driver->getMeta();
