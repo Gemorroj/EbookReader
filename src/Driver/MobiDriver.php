@@ -100,7 +100,7 @@ class MobiDriver extends AbstractDriver
 
             //$this->parseExth(); // todo
         } catch (\Throwable $e) {
-            unset($f);
+            unset($f); // close file
             throw $e;
         }
 
