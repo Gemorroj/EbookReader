@@ -20,6 +20,12 @@ class MobiDriver extends AbstractDriver
         return 'BOOKMOBI' === $content;
     }
 
+    public function getCover(): ?string
+    {
+        // todo
+        throw new \RuntimeException('Not implemented');
+    }
+
     public function getMeta(): MobiMeta
     {
         try {

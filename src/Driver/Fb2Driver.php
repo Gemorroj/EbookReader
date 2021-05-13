@@ -26,6 +26,12 @@ class Fb2Driver extends AbstractDriver
         return true;
     }
 
+    public function getCover(): ?string
+    {
+        // todo
+        throw new \RuntimeException('Not implemented');
+    }
+
     public function getMeta(): Fb2Meta
     {
         $descriptionNode = $this->getFictionBookDescription();

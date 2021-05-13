@@ -8,6 +8,8 @@ interface EbookDriverInterface
 {
     public function __construct(string $file);
 
+    public function getCover(): ?string;
+
     public function getMeta(): EbookMetaInterface;
 
     public function isValid(): bool;

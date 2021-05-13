@@ -26,6 +26,15 @@ class Epub3Driver extends AbstractDriver
         return true;
     }
 
+    public function getCover(): ?string
+    {
+        // todo
+        // For Apple's iBooks to identify and use a cover image, it's necessary to add metadata to the opf file identifying the cover image. <meta name="cover" content="[cover image id]" /> where [cover image id] is the id given to the cover image in the manifest section of the OPF file.
+        // https://wiki.mobileread.com/wiki/Ebook_Covers
+        // for manifest check `id="cover` and `media-type="image/`
+        throw new \RuntimeException('Not implemented');
+    }
+
     public function getMeta(): Epub3Meta
     {
         // todo: check version. 2 or 3
