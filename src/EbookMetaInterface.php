@@ -13,7 +13,7 @@ interface EbookMetaInterface
     // date
     // language
     // license
-    // cover - image (binary? or base64? or stream? or what?)
+    // cover - image (binary? or base64? or stream? or what?). add property to control that? loadCover: bool = false
 
     public function getTitle(): string;
 }
