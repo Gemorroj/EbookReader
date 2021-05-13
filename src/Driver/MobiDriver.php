@@ -15,15 +15,37 @@ class MobiDriver extends AbstractDriver
 {
     public function isValid(): bool
     {
-        $f = \fopen($this->getFile(), 'r');
-        if (!$f) {
-            return false;
-        }
-        \fseek($f, 60);
-        $content = \fread($f, 8);
-        \fclose($f);
+        $content = \file_get_contents($this->getFile(), false, null, 60, 8);
 
         return 'BOOKMOBI' === $content;
+    }
+
+    public function getMeta(): MobiMeta
+    {
+        try {
+            $f = new \SplFileObject($this->getFile(), 'r');
+        } catch (\Exception $e) {
+            throw new ParserException();
+        }
+
+        $f->fseek(60);
+        if ('BOOKMOBI' !== $f->fread(8)) {
+            unset($f); // close file
+            throw new ParserException();
+        }
+
+        try {
+            $this->seekPalmDb($f);
+            $this->seekPalmDoc($f);
+            $title = $this->seekMobiHeader($f);
+
+            //$this->parseExth(); // todo
+        } catch (\Throwable $e) {
+            unset($f); // close file
+            throw $e;
+        }
+
+        return new MobiMeta($title);
     }
 
     /**
@@ -77,33 +99,5 @@ class MobiDriver extends AbstractDriver
         $f->fseek($mobiHeaderStart + 24);
 
         return $title;
-    }
-
-    public function getMeta(): MobiMeta
-    {
-        try {
-            $f = new \SplFileObject($this->getFile(), 'r');
-        } catch (\Exception $e) {
-            throw new ParserException();
-        }
-
-        $f->fseek(60);
-        if ('BOOKMOBI' !== $f->fread(8)) {
-            unset($f); // close file
-            throw new ParserException();
-        }
-
-        try {
-            $this->seekPalmDb($f);
-            $this->seekPalmDoc($f);
-            $title = $this->seekMobiHeader($f);
-
-            //$this->parseExth(); // todo
-        } catch (\Throwable $e) {
-            unset($f); // close file
-            throw $e;
-        }
-
-        return new MobiMeta($title);
     }
 }
