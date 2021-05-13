@@ -67,7 +67,8 @@ class Epub3DriverTest extends TestCase
     public function filesProvider(): array
     {
         return [
-            [__DIR__.'/../fixtures/epub/epub3.epub', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
+            [__DIR__.'/../fixtures/epub/epub3-opf2.epub', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
+            [__DIR__.'/../fixtures/epub/epub3-opf3.epub', 'Children\'s Literature'],
         ];
     }
 }

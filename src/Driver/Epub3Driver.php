@@ -9,15 +9,16 @@ use EbookReader\Meta\Epub3Meta;
 
 /**
  * @see https://www.w3.org/publishing/epub3/epub-spec.html
+ * @see https://wiki.mobileread.com/wiki/EPUB
  */
 class Epub3Driver extends AbstractDriver
 {
-    private ?\DOMElement $packageMetadata = null;
+    private ?\DOMElement $packageNode = null;
 
     public function isValid(): bool
     {
         try {
-            $this->getPackageMetadata();
+            $this->getPackageNode();
         } catch (\Throwable $e) {
             return false;
         }
@@ -27,7 +28,11 @@ class Epub3Driver extends AbstractDriver
 
     public function getMeta(): Epub3Meta
     {
-        $metadataNode = $this->getPackageMetadata();
+        // todo: check version. 2 or 3
+        $packageNode = $this->getPackageNode();
+
+        /** @var \DOMElement $metadataNode */
+        $metadataNode = $packageNode->getElementsByTagName('metadata')->item(0);
 
         /** @var \DOMElement $titleNode */
         $titleNode = $metadataNode->getElementsByTagName('title')->item(0);
@@ -37,10 +42,10 @@ class Epub3Driver extends AbstractDriver
         );
     }
 
-    protected function getPackageMetadata(): \DOMElement
+    protected function getPackageNode(): \DOMElement
     {
-        if ($this->packageMetadata) {
-            return $this->packageMetadata;
+        if ($this->packageNode) {
+            return $this->packageNode;
         }
 
         $zip = new \ZipArchive();
@@ -87,14 +92,14 @@ class Epub3Driver extends AbstractDriver
             throw new ParserException();
         }
 
-        /** @var \DOMElement|null $metadataNode */
-        $metadataNode = $domPackage->getElementsByTagName('metadata')->item(0);
-        if (!$metadataNode) {
+        /** @var \DOMElement|null $packageNode */
+        $packageNode = $domPackage->getElementsByTagName('package')->item(0);
+        if (!$packageNode) {
             throw new ParserException();
         }
 
-        $this->packageMetadata = $metadataNode;
+        $this->packageNode = $packageNode;
 
-        return $this->packageMetadata;
+        return $this->packageNode;
     }
 }

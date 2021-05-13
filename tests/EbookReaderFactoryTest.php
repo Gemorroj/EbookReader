@@ -27,8 +27,10 @@ class EbookReaderFactoryTest extends TestCase
 
     public function testCreateEpub3(): void
     {
-        $epub3 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3.epub');
-        self::assertInstanceOf(Epub3Driver::class, $epub3);
+        $epub3opf2 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3-opf2.epub');
+        self::assertInstanceOf(Epub3Driver::class, $epub3opf2);
+        $epub3opf3 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3-opf3.epub');
+        self::assertInstanceOf(Epub3Driver::class, $epub3opf3);
     }
 
     public function testCreateMobi(): void
