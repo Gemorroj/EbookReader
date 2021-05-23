@@ -33,11 +33,12 @@ class Fb2DriverTest extends TestCase
     /**
      * @dataProvider filesProvider
      */
-    public function testGetMeta(string $file, string $expectedTitle): void
+    public function testGetMeta(string $file, string $expectedTitle, ?string $expectedAuthor): void
     {
         $driver = new Fb2Driver($file);
         $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
+        self::assertSame($expectedAuthor, $meta->getAuthor());
     }
 
     /**
@@ -67,8 +68,14 @@ class Fb2DriverTest extends TestCase
     public function filesProvider(): array
     {
         return [
-            [__DIR__.'/../fixtures/fb2/fb2.fb2', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
-            [__DIR__.'/../fixtures/fb2/fb2.zip', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
+            [__DIR__.'/../fixtures/fb2/fb2.fb2',
+                'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World',
+                'Eric Weiner',
+            ],
+            [__DIR__.'/../fixtures/fb2/fb2.zip',
+                'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World',
+                'Eric Weiner',
+            ],
         ];
     }
 }

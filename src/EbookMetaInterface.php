@@ -15,4 +15,6 @@ interface EbookMetaInterface
     // license
 
     public function getTitle(): string;
+
+    public function getAuthor(): ?string;
 }

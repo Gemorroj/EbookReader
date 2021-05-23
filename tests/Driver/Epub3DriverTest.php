@@ -33,11 +33,12 @@ class Epub3DriverTest extends TestCase
     /**
      * @dataProvider filesProvider
      */
-    public function testGetMeta(string $file, string $expectedTitle): void
+    public function testGetMeta(string $file, string $expectedTitle, ?string $expectedAuthor): void
     {
         $driver = new Epub3Driver($file);
         $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
+        self::assertSame($expectedAuthor, $meta->getAuthor());
     }
 
     /**
@@ -67,8 +68,14 @@ class Epub3DriverTest extends TestCase
     public function filesProvider(): array
     {
         return [
-            [__DIR__.'/../fixtures/epub/epub3-opf2.epub', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
-            [__DIR__.'/../fixtures/epub/epub3-opf3.epub', 'Children\'s Literature'],
+            [__DIR__.'/../fixtures/epub/epub3-opf2.epub',
+                'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World',
+                'Eric Weiner',
+            ],
+            [__DIR__.'/../fixtures/epub/epub3-opf3.epub',
+                'Children\'s Literature, A Textbook of Sources for Teachers and Teacher-Training Classes',
+                'Charles Madison Curry, Erle Elsworth Clippinger',
+            ],
         ];
     }
 }

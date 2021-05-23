@@ -33,11 +33,12 @@ class MobiDriverTest extends TestCase
     /**
      * @dataProvider filesProvider
      */
-    public function testRead(string $file, string $expectedTitle): void
+    public function testRead(string $file, string $expectedTitle, ?string $expectedAuthor): void
     {
         $driver = new MobiDriver($file);
         $meta = $driver->getMeta();
         self::assertSame($expectedTitle, $meta->getTitle());
+        self::assertSame($expectedAuthor, $meta->getAuthor());
     }
 
     /**
@@ -67,7 +68,10 @@ class MobiDriverTest extends TestCase
     public function filesProvider(): array
     {
         return [
-            [__DIR__.'/../fixtures/mobi/mobi.mobi', 'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World'],
+            [__DIR__.'/../fixtures/mobi/mobi.mobi',
+                'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World',
+                'Eric Weiner',
+            ],
         ];
     }
 }

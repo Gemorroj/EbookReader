@@ -44,14 +44,63 @@ class MobiDriver extends AbstractDriver
             $this->seekPalmDb($f);
             $this->seekPalmDoc($f);
             $title = $this->seekMobiHeader($f);
-
-            //$this->parseExth(); // todo
+            $data = $this->parseExth($f);
         } catch (\Throwable $e) {
-            unset($f); // close file
             throw $e;
+        } finally {
+            unset($f); // close file
         }
 
-        return new MobiMeta($title);
+        return new MobiMeta(
+            $title,
+            $data['author']
+        );
+    }
+
+    /**
+     * @return array{author: string|null}
+     */
+    protected function parseExth(\SplFileObject $f): array
+    {
+        $f->fseek(4, \SEEK_CUR); // length
+        $rawRecords = $f->fread(4);
+        if (false === $rawRecords) {
+            throw new ParserException();
+        }
+        $records = (int) \hexdec(\bin2hex($rawRecords));
+
+        $meta = [
+            'author' => null,
+        ];
+        for ($i = 0; $i < $records; ++$i) {
+            $rawType = $f->fread(4);
+            if (false === $rawType) {
+                throw new ParserException();
+            }
+            $rawLength = $f->fread(4);
+            if (false === $rawLength) {
+                throw new ParserException();
+            }
+
+            $type = (int) \hexdec(\bin2hex($rawType));
+            $length = (int) \hexdec(\bin2hex($rawLength));
+
+            if ($length > 0) {
+                $data = $f->fread($length - 8);
+                if (false === $data) {
+                    throw new ParserException();
+                }
+            } else {
+                $data = null;
+            }
+
+            // https://wiki.mobileread.com/wiki/MOBI#EXTH_Header
+            if (100 === $type) {
+                $meta['author'] = $data;
+            }
+        }
+
+        return $meta;
     }
 
     /**
@@ -82,9 +131,17 @@ class MobiDriver extends AbstractDriver
      */
     protected function seekMobiHeader(\SplFileObject $f): string
     {
-        $mobiHeaderStart = $f->ftell() + 2;
+        $f->fseek(2, \SEEK_CUR);
+        $mobiHeaderStart = $f->ftell();
+        if (false === $mobiHeaderStart) {
+            throw new ParserException();
+        }
+        if ('MOBI' !== $f->fread(4)) {
+            throw new ParserException();
+        }
+        $length = (int) \hexdec(\bin2hex($f->fread(4)));
 
-        $f->fseek(70, \SEEK_CUR);
+        $f->fseek(60, \SEEK_CUR);
 
         $data = $f->fread(8);
         if (false === $data) {
@@ -102,7 +159,7 @@ class MobiDriver extends AbstractDriver
             throw new ParserException();
         }
 
-        $f->fseek($mobiHeaderStart + 24);
+        $f->fseek($mobiHeaderStart + $length + 4);
 
         return $title;
     }

@@ -44,16 +44,59 @@ class Epub3Driver extends AbstractDriver
         if (!\in_array($version, [2, 3], true)) {
             throw new UnsupportedFormatException();
         }
-
         /** @var \DOMElement $metadataNode */
         $metadataNode = $packageNode->getElementsByTagName('metadata')->item(0);
 
-        /** @var \DOMElement $titleNode */
-        $titleNode = $metadataNode->getElementsByTagName('title')->item(0);
+        $title = $this->makeTitle($metadataNode);
+        $author = $this->makeAuthor($metadataNode);
 
         return new Epub3Meta(
-            $titleNode->nodeValue
+            $title,
+            $author
         );
+    }
+
+    protected function makeTitle(\DOMElement $metadataNode): string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dctitle
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.1
+
+        $titleNodeList = $metadataNode->getElementsByTagName('title');
+
+        $titles = [];
+        /** @var \DOMElement $titleNode */
+        foreach ($titleNodeList as $titleNode) {
+            $titles[] = $titleNode->nodeValue;
+        }
+
+        return \implode(', ', $titles);
+    }
+
+    protected function makeAuthor(\DOMElement $metadataNode): ?string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dccreator
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.2
+
+        $creatorNodeList = $metadataNode->getElementsByTagName('creator');
+        if (!$creatorNodeList->length) {
+            return null;
+        }
+
+        $authors = $allAuthors = [];
+        /** @var \DOMElement $creatorNode */
+        foreach ($creatorNodeList as $creatorNode) {
+            $allAuthors[] = $creatorNode->nodeValue;
+            $role = $creatorNode->getAttribute('role');
+            if ('aut' === $role) {
+                $authors[] = $creatorNode->nodeValue;
+            }
+        }
+
+        if ($authors) {
+            return \implode(', ', $authors);
+        }
+
+        return \implode(', ', $allAuthors);
     }
 
     protected function getPackageNode(): \DOMElement
