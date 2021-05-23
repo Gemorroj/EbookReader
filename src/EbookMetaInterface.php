@@ -6,15 +6,26 @@ namespace EbookReader;
 
 interface EbookMetaInterface
 {
-    // author
-    // publisher
-    // isbn
-    // description
-    // date
-    // language
-    // license
-
     public function getTitle(): string;
 
     public function getAuthor(): ?string;
+
+    public function getPublisher(): ?string;
+
+    public function getIsbn(): ?string;
+
+    /**
+     * can be a HTML.
+     */
+    public function getDescription(): ?string;
+
+    public function getPublishYear(): ?int;
+
+    public function getPublishMonth(): ?int;
+
+    public function getPublishDay(): ?int;
+
+    public function getLanguage(): ?string;
+
+    public function getLicense(): ?string;
 }

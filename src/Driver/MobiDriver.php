@@ -20,6 +20,12 @@ class MobiDriver extends AbstractDriver
         return 'BOOKMOBI' === $content;
     }
 
+    public function getText(): string
+    {
+        // todo
+        throw new \RuntimeException('Not implemented');
+    }
+
     public function getCover(): ?string
     {
         // todo
@@ -53,12 +59,20 @@ class MobiDriver extends AbstractDriver
 
         return new MobiMeta(
             $title,
-            $data['author']
+            $data['author'],
+            $data['publisher'],
+            $data['isbn'],
+            $data['description'],
+            $data['language'],
+            $data['license'],
+            $data['publishDate'] ? (int) $data['publishDate']->format('Y') : null,
+            $data['publishDate'] ? (int) $data['publishDate']->format('m') : null,
+            $data['publishDate'] ? (int) $data['publishDate']->format('d') : null,
         );
     }
 
     /**
-     * @return array{author: string|null}
+     * @return array{author: string|null, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -71,6 +85,12 @@ class MobiDriver extends AbstractDriver
 
         $meta = [
             'author' => null,
+            'publisher' => null,
+            'description' => null,
+            'isbn' => null,
+            'publishDate' => null,
+            'language' => null,
+            'license' => null,
         ];
         for ($i = 0; $i < $records; ++$i) {
             $rawType = $f->fread(4);
@@ -95,8 +115,25 @@ class MobiDriver extends AbstractDriver
             }
 
             // https://wiki.mobileread.com/wiki/MOBI#EXTH_Header
-            if (100 === $type) {
-                $meta['author'] = $data;
+            switch ($type) {
+                case 100:
+                    $meta['author'] = $data;
+                    break;
+                case 101:
+                    $meta['publisher'] = $data;
+                    break;
+                case 103:
+                    $meta['description'] = $data;
+                    break;
+                case 104:
+                    $meta['isbn'] = $data;
+                    break;
+                case 106:
+                    $meta['publishDate'] = new \DateTimeImmutable($data, new \DateTimeZone('UTC'));
+                    break;
+                case 524:
+                    $meta['language'] = $data;
+                    break;
             }
         }
 

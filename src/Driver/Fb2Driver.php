@@ -27,6 +27,12 @@ class Fb2Driver extends AbstractDriver
         return true;
     }
 
+    public function getText(): string
+    {
+        // todo
+        throw new \RuntimeException('Not implemented');
+    }
+
     public function getCover(): ?string
     {
         // todo
@@ -40,13 +46,145 @@ class Fb2Driver extends AbstractDriver
         /** @var \DOMElement $titleInfoNode */
         $titleInfoNode = $descriptionNode->getElementsByTagName('title-info')->item(0);
 
+        /** @var \DOMElement|null $publishNodeInfo */
+        $publishNodeInfo = $descriptionNode->getElementsByTagName('publish-info')->item(0);
+
         $title = $this->makeTitle($titleInfoNode);
         $author = $this->makeAuthor($titleInfoNode);
+        $publisher = $publishNodeInfo ? $this->makePublisher($publishNodeInfo) : null;
+        $isbn = $publishNodeInfo ? $this->makeIsbn($publishNodeInfo) : null;
+        $description = $this->makeDescription($titleInfoNode);
+        $language = $this->makeLanguage($titleInfoNode);
+        $license = $this->makeLicense();
+        $publishYear = $this->makePublishYear($publishNodeInfo);
 
         return new Fb2Meta(
             $title,
-            $author
+            $author,
+            $publisher,
+            $isbn,
+            $description,
+            $language,
+            $license,
+            $publishYear,
+            null,
+            null,
         );
+    }
+
+    protected function makePublishYear(\DOMElement $publishNodeInfo): ?int
+    {
+        /*
+          <xs:element name="year" type="xs:gYear" minOccurs="0">
+           <xs:annotation>
+            <xs:documentation>Year of the original (paper) publication</xs:documentation>
+           </xs:annotation>
+          </xs:element>
+         */
+
+        /** @var \DOMElement|null $yearNode */
+        $yearNode = $publishNodeInfo->getElementsByTagName('year')->item(0);
+        if ($yearNode) {
+            return (int) $yearNode->nodeValue;
+        }
+
+        return null;
+    }
+
+    protected function makeLicense(): ?string
+    {
+        return null;
+    }
+
+    protected function makeLanguage(\DOMElement $titleInfoNode): ?string
+    {
+        /*
+   <xs:element name="lang" type="xs:string">
+    <xs:annotation>
+     <xs:documentation>Book's language</xs:documentation>
+    </xs:annotation>
+   </xs:element>
+         */
+
+        /** @var \DOMElement|null $langNode */
+        $langNode = $titleInfoNode->getElementsByTagName('lang')->item(0);
+        if ($langNode) {
+            return $langNode->nodeValue;
+        }
+
+        return null;
+    }
+
+    protected function makeDescription(\DOMElement $titleInfoNode): ?string
+    {
+        /*
+   <xs:element name="annotation" type="annotationType" minOccurs="0">
+    <xs:annotation>
+     <xs:documentation>Annotation for this book</xs:documentation>
+    </xs:annotation>
+   </xs:element>
+
+  <xs:complexType name="annotationType">
+  <xs:annotation>
+   <xs:documentation>A cut-down version of <section> used in annotations</xs:documentation>
+  </xs:annotation>
+  <xs:choice minOccurs="0" maxOccurs="unbounded">
+   <xs:element name="p" type="pType"/>
+   <xs:element name="poem" type="poemType"/>
+   <xs:element name="cite" type="citeType"/>
+   <xs:element name="subtitle" type="pType"/>
+   <xs:element name="table" type="tableType"/>
+   <xs:element name="empty-line"/>
+  </xs:choice>
+  <xs:attribute name="id" type="xs:ID" use="optional"/>
+  <xs:attribute ref="xml:lang"/>
+ </xs:complexType>
+         */
+
+        /** @var \DOMElement|null $annotationNode */
+        $annotationNode = $titleInfoNode->getElementsByTagName('annotation')->item(0);
+        if ($annotationNode) {
+            $text = [];
+            foreach ($annotationNode->childNodes as $childNode) {
+                $text[] = $annotationNode->ownerDocument->saveHTML($childNode);
+            }
+
+            return \trim(\implode('', $text));
+        }
+
+        return null;
+    }
+
+    protected function makeIsbn(\DOMElement $publishNodeInfo): ?string
+    {
+        /*
+            <xs:element name="isbn" type="textFieldType" minOccurs="0"/>
+         */
+        /** @var \DOMElement|null $isbnNode */
+        $isbnNode = $publishNodeInfo->getElementsByTagName('isbn')->item(0);
+        if ($isbnNode) {
+            return $isbnNode->nodeValue;
+        }
+
+        return null;
+    }
+
+    protected function makePublisher(\DOMElement $publishNodeInfo): ?string
+    {
+        /*
+          <xs:element name="publisher" type="textFieldType" minOccurs="0">
+           <xs:annotation>
+            <xs:documentation>Original (paper) book publisher</xs:documentation>
+           </xs:annotation>
+          </xs:element>
+         */
+        /** @var \DOMElement|null $publisherNode */
+        $publisherNode = $publishNodeInfo->getElementsByTagName('publisher')->item(0);
+        if ($publisherNode) {
+            return $publisherNode->nodeValue;
+        }
+
+        return null;
     }
 
     protected function makeAuthor(\DOMElement $titleInfoNode): ?string
@@ -140,7 +278,7 @@ class Fb2Driver extends AbstractDriver
         while ($reader->read()) {
             if (\XmlReader::ELEMENT === $reader->nodeType && 'description' === $reader->name) { // first description element
                 /** @var \DOMElement|false $descriptionNode */
-                $descriptionNode = $reader->expand();
+                $descriptionNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
                 $reader->close();
                 if (!$descriptionNode) {
                     throw new ParserException();

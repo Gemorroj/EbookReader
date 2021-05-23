@@ -27,6 +27,12 @@ class Epub3Driver extends AbstractDriver
         return true;
     }
 
+    public function getText(): string
+    {
+        // todo
+        throw new \RuntimeException('Not implemented');
+    }
+
     public function getCover(): ?string
     {
         // todo
@@ -49,11 +55,147 @@ class Epub3Driver extends AbstractDriver
 
         $title = $this->makeTitle($metadataNode);
         $author = $this->makeAuthor($metadataNode);
+        $publisher = $this->makePublisher($metadataNode);
+        $isbn = $this->makeIsbn($metadataNode, $version);
+        $description = $this->makeDescription($metadataNode);
+        $language = $this->makeLanguage($metadataNode);
+        $license = $this->makeLicense($metadataNode);
+        $publishDate = $this->makePublishDate($metadataNode);
 
         return new Epub3Meta(
             $title,
-            $author
+            $author,
+            $publisher,
+            $isbn,
+            $description,
+            $language,
+            $license,
+            $publishDate['year'],
+            $publishDate['month'],
+            $publishDate['day'],
         );
+    }
+
+    /**
+     * @return array{year: int|null, month: int|null, day: int|null}
+     */
+    protected function makePublishDate(\DOMElement $metadataNode): ?array
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcdate
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.7
+
+        /** @var \DomElement|null $dateNode */
+        $dateNode = $metadataNode->getElementsByTagName('date')->item(0);
+
+        $date = [
+            'year' => null,
+            'month' => null,
+            'day' => null,
+        ];
+
+        if ($dateNode) {
+            $dateStr = $dateNode->nodeValue;
+            $dateStrLength = \strlen($dateStr);
+
+            if (4 === $dateStrLength) {
+                $date['year'] = (int) $dateStr;
+            } elseif (7 === $dateStrLength) {
+                $arr = \explode('-', $dateStr, 2);
+                $date['year'] = (int) $arr[0];
+                $date['month'] = (int) $arr[1];
+            } else {
+                $obj = new \DateTimeImmutable($dateStr, new \DateTimeZone('UTC'));
+                $date['year'] = (int) $obj->format('Y');
+                $date['month'] = (int) $obj->format('m');
+                $date['day'] = (int) $obj->format('d');
+            }
+        }
+
+        return $date;
+    }
+
+    protected function makeLicense(\DOMElement $metadataNode): ?string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.15
+
+        /** @var \DomElement|null $rightsNode */
+        $rightsNode = $metadataNode->getElementsByTagName('rights')->item(0);
+
+        if ($rightsNode) {
+            return $rightsNode->nodeValue;
+        }
+
+        return null;
+    }
+
+    protected function makeLanguage(\DOMElement $metadataNode): ?string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dclanguage
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.12
+
+        /** @var \DomElement $languageNode */
+        $languageNode = $metadataNode->getElementsByTagName('language')->item(0);
+
+        return $languageNode->nodeValue;
+    }
+
+    protected function makeDescription(\DOMElement $metadataNode): ?string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.4
+
+        /** @var \DomElement|null $descriptionNode */
+        $descriptionNode = $metadataNode->getElementsByTagName('description')->item(0);
+
+        if ($descriptionNode) {
+            return \trim($descriptionNode->nodeValue);
+        }
+
+        return null;
+    }
+
+    protected function makeIsbn(\DOMElement $metadataNode, int $version): ?string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcidentifier
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.10
+
+        $identifierNodeList = $metadataNode->getElementsByTagName('identifier');
+
+        if (3 === $version) {
+            /** @var \DOMElement $identifierNode */
+            foreach ($identifierNodeList as $identifierNode) {
+                $identifier = $identifierNode->nodeValue;
+                if (0 === \strpos($identifier, 'urn:isbn:')) {
+                    return \substr($identifier, 9);
+                }
+            }
+        } elseif (2 === $version) {
+            /** @var \DOMElement $identifierNode */
+            foreach ($identifierNodeList as $identifierNode) {
+                $scheme = $identifierNode->getAttribute('opf:scheme');
+                if ('ISBN' === $scheme) {
+                    return $identifierNode->nodeValue;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    protected function makePublisher(\DOMElement $metadataNode): ?string
+    {
+        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
+        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.5
+
+        /** @var \DOMElement|null $publisherNode */
+        $publisherNode = $metadataNode->getElementsByTagName('publisher')->item(0);
+
+        if ($publisherNode) {
+            return $publisherNode->nodeValue;
+        }
+
+        return null;
     }
 
     protected function makeTitle(\DOMElement $metadataNode): string
@@ -86,7 +228,7 @@ class Epub3Driver extends AbstractDriver
         /** @var \DOMElement $creatorNode */
         foreach ($creatorNodeList as $creatorNode) {
             $allAuthors[] = $creatorNode->nodeValue;
-            $role = $creatorNode->getAttribute('role');
+            $role = $creatorNode->getAttribute('opf:role');
             if ('aut' === $role) {
                 $authors[] = $creatorNode->nodeValue;
             }
