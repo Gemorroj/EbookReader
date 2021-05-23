@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Exception\ParserException;
+use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Meta\Epub3Meta;
 
 /**
@@ -37,8 +38,12 @@ class Epub3Driver extends AbstractDriver
 
     public function getMeta(): Epub3Meta
     {
-        // todo: check version. 2 or 3
         $packageNode = $this->getPackageNode();
+
+        $version = (int) $packageNode->getAttribute('version');
+        if (!\in_array($version, [2, 3], true)) {
+            throw new UnsupportedFormatException();
+        }
 
         /** @var \DOMElement $metadataNode */
         $metadataNode = $packageNode->getElementsByTagName('metadata')->item(0);
