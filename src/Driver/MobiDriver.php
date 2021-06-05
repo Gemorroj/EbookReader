@@ -20,7 +20,7 @@ class MobiDriver extends AbstractDriver
         return 'BOOKMOBI' === $content;
     }
 
-    public function getText(): string
+    public function getData(): array
     {
         // todo
         throw new \RuntimeException('Not implemented');

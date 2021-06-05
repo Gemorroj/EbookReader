@@ -27,7 +27,7 @@ class Fb2Driver extends AbstractDriver
         return true;
     }
 
-    public function getText(): string
+    public function getData(): array
     {
         // todo
         throw new \RuntimeException('Not implemented');
@@ -270,7 +270,7 @@ class Fb2Driver extends AbstractDriver
         }
 
         /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR); // throws \ValueError for php 8
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS); // throws \ValueError for php 8
         if (!$reader) {
             throw new ParserException();
         }

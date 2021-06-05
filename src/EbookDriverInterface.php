@@ -14,9 +14,9 @@ interface EbookDriverInterface
     public function getCover(): ?string;
 
     /**
-     * can be a HTML.
+     * @return EbookDataInterface[]
      */
-    public function getText(): string;
+    public function getData(): array;
 
     public function getMeta(): EbookMetaInterface;
 
