@@ -276,7 +276,7 @@ class Fb2Driver extends AbstractDriver
         }
 
         while ($reader->read()) {
-            if (\XmlReader::ELEMENT === $reader->nodeType && 'description' === $reader->name) { // first description element
+            if (\XMLReader::ELEMENT === $reader->nodeType && 'description' === $reader->name) { // first description element
                 /** @var \DOMElement|false $descriptionNode */
                 $descriptionNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
                 $reader->close();

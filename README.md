@@ -12,7 +12,7 @@
 
 
 ### Requirements:
-- PHP >= 7.4.3
+- PHP >= 8.0.2
 - ext-zip
 - ext-dom
 - ext-xmlreader
