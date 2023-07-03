@@ -269,7 +269,7 @@ class Epub3Driver extends AbstractDriver
             /** @var \DOMElement $identifierNode */
             foreach ($identifierNodeList as $identifierNode) {
                 $identifier = $identifierNode->nodeValue;
-                if (0 === \strpos($identifier, 'urn:isbn:')) {
+                if (\str_starts_with($identifier, 'urn:isbn:')) {
                     return \substr($identifier, 9);
                 }
             }

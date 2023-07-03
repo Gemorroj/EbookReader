@@ -20,7 +20,7 @@ class Epub3Data implements EbookDataInterface
     /**
      * @param Style[] $styles
      */
-    public function __construct(string $text, ?string $title, array $styles = [], ?bool $navigation = null)
+    public function __construct(string $text, ?string $title, array $styles = [], bool $navigation = null)
     {
         $this->text = $text;
         $this->title = $title;
