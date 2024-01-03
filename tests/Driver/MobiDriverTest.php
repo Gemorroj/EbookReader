@@ -81,9 +81,6 @@ class MobiDriverTest extends TestCase
         ];
     }
 
-    /**
-     * @return string[][]
-     */
     public function filesProvider(): array
     {
         return [

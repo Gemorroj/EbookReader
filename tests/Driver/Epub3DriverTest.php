@@ -33,6 +33,8 @@ class Epub3DriverTest extends TestCase
     }
 
     /**
+     * @param Style[] $expectedStyles
+     *
      * @dataProvider filesDataProvider
      */
     public function testGetData(
@@ -56,7 +58,6 @@ class Epub3DriverTest extends TestCase
         self::assertSame($expectedText, $firstData->getText(), $file);
 
         self::assertCount(\count($expectedStyles), $firstData->getStyles(), $file);
-        /** @var Style $expectedStyle */
         foreach ($expectedStyles as $expectedStyle) {
             $styleExists = false;
             foreach ($firstData->getStyles() as $style) {
@@ -121,9 +122,6 @@ class Epub3DriverTest extends TestCase
         ];
     }
 
-    /**
-     * @return string[][]
-     */
     public function filesDataProvider(): array
     {
         return [

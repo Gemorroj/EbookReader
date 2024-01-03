@@ -7,16 +7,19 @@ namespace EbookReader\Data;
 use EbookReader\EbookDataInterface;
 use EbookReader\Resource\Style;
 
-class Epub3Data implements EbookDataInterface
+class Fb2Data implements EbookDataInterface
 {
     /**
-     * @param Style[] $styles
+     * @param Fb2DataEpigraph[] $epigraphs
+     * @param Style[]           $styles
      */
     public function __construct(
         private string $text,
         private ?string $title,
+        private ?string $annotation,
+        private array $epigraphs = [],
         private array $styles = [],
-        private ?bool $navigation = null,
+        // todo: images
     ) {
     }
 
@@ -38,8 +41,16 @@ class Epub3Data implements EbookDataInterface
         return $this->styles;
     }
 
-    public function isNavigation(): ?bool
+    /**
+     * @return Fb2DataEpigraph[]
+     */
+    public function getEpigraphs(): array
     {
-        return $this->navigation;
+        return $this->epigraphs;
+    }
+
+    public function getAnnotation(): ?string
+    {
+        return $this->annotation;
     }
 }

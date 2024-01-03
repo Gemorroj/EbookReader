@@ -9,13 +9,8 @@ class Style
     public const TYPE_LINK = 'link';
     public const TYPE_CSS = 'css';
 
-    private string $type;
-    private string $data;
-
-    public function __construct(string $data, string $type)
+    public function __construct(private string $data, private string $type)
     {
-        $this->data = $data;
-        $this->type = $type;
     }
 
     public function getType(): string

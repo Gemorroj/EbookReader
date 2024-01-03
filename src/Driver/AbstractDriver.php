@@ -8,11 +8,8 @@ use EbookReader\EbookDriverInterface;
 
 abstract class AbstractDriver implements EbookDriverInterface
 {
-    private string $file;
-
-    public function __construct(string $file)
+    public function __construct(private string $file)
     {
-        $this->file = $file;
     }
 
     public function getFile(): string

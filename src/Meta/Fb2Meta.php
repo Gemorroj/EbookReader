@@ -8,39 +8,18 @@ use EbookReader\EbookMetaInterface;
 
 class Fb2Meta implements EbookMetaInterface
 {
-    private string $title;
-    private ?string $author;
-    private ?string $publisher;
-    private ?string $isbn;
-    private ?string $description;
-    private ?string $language;
-    private ?string $license;
-    private ?int $publishYear;
-    private ?int $publishMonth;
-    private ?int $publishDay;
-
     public function __construct(
-        string $title,
-        ?string $author,
-        ?string $publisher,
-        ?string $isbn,
-        ?string $description,
-        ?string $language,
-        ?string $license,
-        ?int $publishYear,
-        ?int $publishMonth,
-        ?int $publishDay
+        private string $title,
+        private ?string $author,
+        private ?string $publisher,
+        private ?string $isbn,
+        private ?string $description,
+        private ?string $language,
+        private ?string $license,
+        private ?int $publishYear,
+        private ?int $publishMonth,
+        private ?int $publishDay
     ) {
-        $this->title = $title;
-        $this->author = $author;
-        $this->publisher = $publisher;
-        $this->isbn = $isbn;
-        $this->description = $description;
-        $this->language = $language;
-        $this->license = $license;
-        $this->publishYear = $publishYear;
-        $this->publishMonth = $publishMonth;
-        $this->publishDay = $publishDay;
     }
 
     public function getTitle(): string

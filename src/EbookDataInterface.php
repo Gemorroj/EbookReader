@@ -9,7 +9,7 @@ use EbookReader\Resource\Style;
 interface EbookDataInterface
 {
     /**
-     * can be a HTML.
+     * can be an HTML.
      */
     public function getText(): string;
 
@@ -19,6 +19,4 @@ interface EbookDataInterface
      * @return Style[]
      */
     public function getStyles(): array;
-
-    public function isNavigation(): ?bool;
 }

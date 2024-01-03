@@ -32,6 +32,8 @@ class Epub3Driver extends AbstractDriver
 
     /**
      * Should unzip the EPUB file for references.
+     *
+     * @return Epub3Data[]
      */
     public function getData(): array
     {
@@ -93,8 +95,7 @@ class Epub3Driver extends AbstractDriver
 
             /** @var \DOMElement $headNode */
             $headNode = $domFile->getElementsByTagName('head')->item(0);
-            $titleNode = $headNode->getElementsByTagName('title')->item(0);
-            $title = $titleNode ? $titleNode->textContent : null;
+            $title = $headNode->getElementsByTagName('title')->item(0)?->textContent;
 
             $styles = [];
             $linkNodes = $headNode->getElementsByTagName('link');
@@ -113,6 +114,7 @@ class Epub3Driver extends AbstractDriver
             /** @var \DOMElement $bodyNode */
             $bodyNode = $domFile->getElementsByTagName('body')->item(0);
             $text = '';
+            /** @var \DOMElement|\DOMNode|\DOMNameSpaceNode $childNode */
             foreach ($bodyNode->childNodes as $childNode) {
                 $text .= $bodyNode->ownerDocument->saveHTML($childNode);
             }
