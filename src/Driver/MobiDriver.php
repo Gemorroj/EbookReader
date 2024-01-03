@@ -153,6 +153,7 @@ class MobiDriver extends AbstractDriver
         $records = (int) \hexdec(\bin2hex($content));
 
         $f->fseek((4 + 1 + 3) * $records, \SEEK_CUR);
+        $f->fseek(2, \SEEK_CUR);
     }
 
     /**
@@ -168,7 +169,6 @@ class MobiDriver extends AbstractDriver
      */
     protected function seekMobiHeader(\SplFileObject $f): string
     {
-        $f->fseek(2, \SEEK_CUR);
         $mobiHeaderStart = $f->ftell();
         if (false === $mobiHeaderStart) {
             throw new ParserException();
