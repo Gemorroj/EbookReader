@@ -9,13 +9,12 @@ use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Resource\Style;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class Fb2DriverTest extends TestCase
 {
-    /**
-     * @dataProvider filesProvider
-     */
+    #[DataProvider('filesProvider')]
     public function testIsValid(string $file): void
     {
         $driver = new Fb2Driver($file);
@@ -23,9 +22,7 @@ class Fb2DriverTest extends TestCase
         self::assertTrue($result);
     }
 
-    /**
-     * @dataProvider filesProviderFake
-     */
+    #[DataProvider('filesProviderFake')]
     public function testIsValidFake(string $file): void
     {
         $driver = new Fb2Driver($file);
@@ -33,9 +30,7 @@ class Fb2DriverTest extends TestCase
         self::assertFalse($result);
     }
 
-    /**
-     * @dataProvider filesProvider
-     */
+    #[DataProvider('filesProvider')]
     public function testGetMeta(
         string $file,
         string $expectedTitle,
@@ -63,9 +58,7 @@ class Fb2DriverTest extends TestCase
         self::assertSame($expectedPublishDay, $meta->getPublishDay());
     }
 
-    /**
-     * @dataProvider filesProviderFake
-     */
+    #[DataProvider('filesProviderFake')]
     public function testGetMetaFake(string $file): void
     {
         $driver = new Fb2Driver($file);
@@ -76,7 +69,7 @@ class Fb2DriverTest extends TestCase
     /**
      * @return string[][]
      */
-    public function filesProviderFake(): array
+    public static function filesProviderFake(): array
     {
         return [
             [__DIR__.'/../fixtures/fake.xml'],
@@ -87,9 +80,8 @@ class Fb2DriverTest extends TestCase
     /**
      * @param Style[]           $expectedStyles
      * @param Fb2DataEpigraph[] $expectedEpigraphs
-     *
-     * @dataProvider filesDataProvider
      */
+    #[DataProvider('filesDataProvider')]
     public function testGetData(
         string $file,
         int $expectedCount,
@@ -130,7 +122,7 @@ class Fb2DriverTest extends TestCase
         }
     }
 
-    public function filesDataProvider(): array
+    public static function filesDataProvider(): array
     {
         return [
             [__DIR__.'/../fixtures/fb2/fb2.fb2',
@@ -171,7 +163,7 @@ class Fb2DriverTest extends TestCase
         ];
     }
 
-    public function filesProvider(): array
+    public static function filesProvider(): array
     {
         return [
             [__DIR__.'/../fixtures/fb2/fb2.fb2',

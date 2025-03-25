@@ -6,13 +6,12 @@ namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Exception\ParserException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class MobiDriverTest extends TestCase
 {
-    /**
-     * @dataProvider filesProvider
-     */
+    #[DataProvider('filesProvider')]
     public function testIsValid(string $file): void
     {
         $driver = new MobiDriver($file);
@@ -20,9 +19,7 @@ class MobiDriverTest extends TestCase
         self::assertTrue($result);
     }
 
-    /**
-     * @dataProvider filesProviderFake
-     */
+    #[DataProvider('filesProviderFake')]
     public function testIsValidFake(string $file): void
     {
         $driver = new MobiDriver($file);
@@ -30,9 +27,7 @@ class MobiDriverTest extends TestCase
         self::assertFalse($result);
     }
 
-    /**
-     * @dataProvider filesProvider
-     */
+    #[DataProvider('filesProvider')]
     public function testRead(
         string $file,
         string $expectedTitle,
@@ -60,9 +55,7 @@ class MobiDriverTest extends TestCase
         self::assertSame($expectedPublishDay, $meta->getPublishDay());
     }
 
-    /**
-     * @dataProvider filesProviderFake
-     */
+    #[DataProvider('filesProviderFake')]
     public function testReadFake(string $file): void
     {
         $driver = new MobiDriver($file);
@@ -73,7 +66,7 @@ class MobiDriverTest extends TestCase
     /**
      * @return string[][]
      */
-    public function filesProviderFake(): array
+    public static function filesProviderFake(): array
     {
         return [
             [__DIR__.'/../fixtures/fake.xml'],
@@ -81,7 +74,7 @@ class MobiDriverTest extends TestCase
         ];
     }
 
-    public function filesProvider(): array
+    public static function filesProvider(): array
     {
         return [
             [__DIR__.'/../fixtures/mobi/mobi.mobi',

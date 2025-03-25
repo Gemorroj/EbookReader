@@ -8,13 +8,12 @@ use EbookReader\Data\Epub3Data;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Resource\Style;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class Epub3DriverTest extends TestCase
 {
-    /**
-     * @dataProvider filesMetaProvider
-     */
+    #[DataProvider('filesMetaProvider')]
     public function testIsValid(string $file): void
     {
         $driver = new Epub3Driver($file);
@@ -22,9 +21,7 @@ class Epub3DriverTest extends TestCase
         self::assertTrue($result);
     }
 
-    /**
-     * @dataProvider filesProviderFake
-     */
+    #[DataProvider('filesProviderFake')]
     public function testIsValidFake(string $file): void
     {
         $driver = new Epub3Driver($file);
@@ -34,9 +31,8 @@ class Epub3DriverTest extends TestCase
 
     /**
      * @param Style[] $expectedStyles
-     *
-     * @dataProvider filesDataProvider
      */
+    #[DataProvider('filesDataProvider')]
     public function testGetData(
         string $file,
         int $expectedCount,
@@ -71,9 +67,7 @@ class Epub3DriverTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider filesMetaProvider
-     */
+    #[DataProvider('filesMetaProvider')]
     public function testGetMeta(
         string $file,
         string $expectedTitle,
@@ -101,9 +95,7 @@ class Epub3DriverTest extends TestCase
         self::assertSame($expectedPublishDay, $meta->getPublishDay());
     }
 
-    /**
-     * @dataProvider filesProviderFake
-     */
+    #[DataProvider('filesProviderFake')]
     public function testGetMetaFake(string $file): void
     {
         $driver = new Epub3Driver($file);
@@ -114,7 +106,7 @@ class Epub3DriverTest extends TestCase
     /**
      * @return string[][]
      */
-    public function filesProviderFake(): array
+    public static function filesProviderFake(): array
     {
         return [
             [__DIR__.'/../fixtures/fake.xml'],
@@ -122,7 +114,7 @@ class Epub3DriverTest extends TestCase
         ];
     }
 
-    public function filesDataProvider(): array
+    public static function filesDataProvider(): array
     {
         return [
             [__DIR__.'/../fixtures/epub/epub3-opf2.epub',
@@ -152,7 +144,7 @@ class Epub3DriverTest extends TestCase
     /**
      * @return string[][]
      */
-    public function filesMetaProvider(): array
+    public static function filesMetaProvider(): array
     {
         return [
             [__DIR__.'/../fixtures/epub/epub3-opf2.epub',
