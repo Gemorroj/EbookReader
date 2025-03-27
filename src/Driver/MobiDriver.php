@@ -11,7 +11,7 @@ use EbookReader\Meta\MobiMeta;
  * @see https://wiki.mobileread.com/wiki/MOBI
  * @see https://github.com/choccybiccy/mobi
  */
-class MobiDriver extends AbstractDriver
+final class MobiDriver extends AbstractDriver
 {
     public function isValid(): bool
     {

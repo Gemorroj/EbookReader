@@ -9,12 +9,13 @@ use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Meta\Epub3Meta;
 use EbookReader\Resource\Style;
+use EbookReader\Resource\StyleType;
 
 /**
  * @see https://www.w3.org/publishing/epub3/epub-spec.html
  * @see https://wiki.mobileread.com/wiki/EPUB
  */
-class Epub3Driver extends AbstractDriver
+final class Epub3Driver extends AbstractDriver
 {
     private ?\DOMElement $packageNode = null;
     private ?string $packageDirectory = null;
@@ -102,13 +103,13 @@ class Epub3Driver extends AbstractDriver
             /** @var \DOMElement $linkNode */
             foreach ($linkNodes as $linkNode) {
                 if ('stylesheet' === $linkNode->getAttribute('rel')) {
-                    $styles[] = new Style($linkNode->getAttribute('href'), Style::TYPE_LINK);
+                    $styles[] = new Style($linkNode->getAttribute('href'), StyleType::LINK);
                 }
             }
             $styleNodes = $headNode->getElementsByTagName('style');
             /** @var \DOMElement $styleNode */
             foreach ($styleNodes as $styleNode) {
-                $styles[] = new Style($styleNode->nodeValue, Style::TYPE_CSS);
+                $styles[] = new Style($styleNode->nodeValue, StyleType::CSS);
             }
 
             /** @var \DOMElement $bodyNode */
@@ -184,7 +185,7 @@ class Epub3Driver extends AbstractDriver
     /**
      * @return array{year: int|null, month: int|null, day: int|null}
      */
-    protected function makePublishDate(\DOMElement $metadataNode): ?array
+    protected function makePublishDate(\DOMElement $metadataNode): array
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcdate
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.7

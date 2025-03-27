@@ -9,7 +9,7 @@ use EbookReader\Exception\ParserException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-class MobiDriverTest extends TestCase
+final class MobiDriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
     public function testIsValid(string $file): void

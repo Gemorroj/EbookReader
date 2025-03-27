@@ -7,7 +7,7 @@ namespace EbookReader\Data;
 use EbookReader\EbookDataInterface;
 use EbookReader\Resource\Style;
 
-class Epub3Data implements EbookDataInterface
+final readonly class Epub3Data implements EbookDataInterface
 {
     /**
      * @param Style[] $styles

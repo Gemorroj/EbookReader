@@ -11,7 +11,7 @@ use EbookReader\EbookReaderFactory;
 use EbookReader\Exception\UnsupportedFormatException;
 use PHPUnit\Framework\TestCase;
 
-class EbookReaderFactoryTest extends TestCase
+final class EbookReaderFactoryTest extends TestCase
 {
     public function testCreateFb2(): void
     {

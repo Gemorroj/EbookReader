@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace EbookReader\Resource;
 
-class Style
+final readonly class Style
 {
-    public const TYPE_LINK = 'link';
-    public const TYPE_CSS = 'css';
-
-    public function __construct(private string $data, private string $type)
+    public function __construct(private string $data, private StyleType $type)
     {
     }
 
-    public function getType(): string
+    public function getType(): StyleType
     {
         return $this->type;
     }
@@ -25,11 +22,11 @@ class Style
 
     public function isLink(): bool
     {
-        return self::TYPE_LINK === $this->getType();
+        return StyleType::LINK === $this->getType();
     }
 
     public function isCss(): bool
     {
-        return self::TYPE_CSS === $this->getType();
+        return StyleType::CSS === $this->getType();
     }
 }

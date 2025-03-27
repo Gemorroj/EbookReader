@@ -12,7 +12,7 @@ use EbookReader\Resource\Style;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-class Fb2DriverTest extends TestCase
+final class Fb2DriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
     public function testIsValid(string $file): void

@@ -6,7 +6,7 @@ namespace EbookReader\Meta;
 
 use EbookReader\EbookMetaInterface;
 
-class Fb2Meta implements EbookMetaInterface
+final readonly class Fb2Meta implements EbookMetaInterface
 {
     public function __construct(
         private string $title,

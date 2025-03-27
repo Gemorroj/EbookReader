@@ -7,7 +7,7 @@ namespace EbookReader\Data;
 use EbookReader\EbookDataInterface;
 use EbookReader\Resource\Style;
 
-class Fb2Data implements EbookDataInterface
+final readonly class Fb2Data implements EbookDataInterface
 {
     /**
      * @param Fb2DataEpigraph[] $epigraphs

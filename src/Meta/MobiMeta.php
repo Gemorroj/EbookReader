@@ -6,7 +6,7 @@ namespace EbookReader\Meta;
 
 use EbookReader\EbookMetaInterface;
 
-class MobiMeta implements EbookMetaInterface
+final readonly class MobiMeta implements EbookMetaInterface
 {
     public function __construct(
         private string $title,

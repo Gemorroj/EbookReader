@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Data;
 
-class Fb2DataEpigraph
+final readonly class Fb2DataEpigraph
 {
     /**
      * @param string[] $author

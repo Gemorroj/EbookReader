@@ -8,10 +8,11 @@ use EbookReader\Data\Epub3Data;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Resource\Style;
+use EbookReader\Resource\StyleType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-class Epub3DriverTest extends TestCase
+final class Epub3DriverTest extends TestCase
 {
     #[DataProvider('filesMetaProvider')]
     public function testIsValid(string $file): void
@@ -120,21 +121,21 @@ class Epub3DriverTest extends TestCase
             [__DIR__.'/../fixtures/epub/epub3-opf2.epub',
                 7,
                 'Cover Image',
-                [new Style('../stylesheet.css', Style::TYPE_LINK), new Style('../page_styles.css', Style::TYPE_LINK)],
+                [new Style('../stylesheet.css', StyleType::LINK), new Style('../page_styles.css', StyleType::LINK)],
                 null,
                 '<div class="calibre"><div class="body"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="100%" height="100%" viewBox="0 0 500 656"><image width="500" height="656" xlink:href="images/GeographyofBli-cover.jpg" transform="translate(0 0)"></image></svg></div></div>',
             ],
             [__DIR__.'/../fixtures/epub/epub3-opf3.epub',
                 3,
                 'Children\'s Literature',
-                [new Style('css/epub.css', Style::TYPE_LINK)],
+                [new Style('css/epub.css', StyleType::LINK)],
                 false,
                 '<div><img src="images/cover.png" alt="Cover Image" title="Cover Image"></img></div>',
             ],
             [__DIR__.'/../fixtures/epub/mayakovskiy-opf2.epub',
                 14,
                 'Cover of Во весь голос. Стихотворения и поэмы',
-                [new Style('body {padding:0;} img {height: 100%; max-width: 100%;} div {text-align: center; page-break-after: always;}', Style::TYPE_CSS)],
+                [new Style('body {padding:0;} img {height: 100%; max-width: 100%;} div {text-align: center; page-break-after: always;}', StyleType::CSS)],
                 null,
                 '<div><div><img alt="cover" src="cover.jpg"></img></div></div>',
             ],

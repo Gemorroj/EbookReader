@@ -9,13 +9,14 @@ use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\Fb2Meta;
 use EbookReader\Resource\Style;
+use EbookReader\Resource\StyleType;
 
 /**
  * @see https://wiki.mobileread.com/wiki/FB2
  * @see http://www.fictionbook.org/index.php/XML_%D1%81%D1%85%D0%B5%D0%BC%D0%B0_FictionBook2.2
  * @see http://www.tinlib.ru/kompyutery_i_internet/sozdanie_yelektronnyh_knig_v_formate_fictionbook_2_1_prakticheskoe_rukovodstvo/p5.php
  */
-class Fb2Driver extends AbstractDriver
+final class Fb2Driver extends AbstractDriver
 {
     private ?string $internalFile = null;
     private ?\DOMElement $fictionBookDescription = null;
@@ -44,7 +45,7 @@ class Fb2Driver extends AbstractDriver
 
         $styles = [];
         if ($stylesheetNode) {
-            $styles[] = new Style($stylesheetNode->nodeValue, Style::TYPE_CSS);
+            $styles[] = new Style($stylesheetNode->nodeValue, StyleType::CSS);
         }
 
         /** @var \DOMElement $sectionNode */
@@ -152,7 +153,6 @@ class Fb2Driver extends AbstractDriver
         $isbn = $publishNodeInfo ? $this->makeIsbn($publishNodeInfo) : null;
         $description = $this->makeDescription($titleInfoNode);
         $language = $this->makeLanguage($titleInfoNode);
-        $license = $this->makeLicense();
         $publishYear = $this->makePublishYear($publishNodeInfo);
 
         return new Fb2Meta(
@@ -162,7 +162,7 @@ class Fb2Driver extends AbstractDriver
             $isbn,
             $description,
             $language,
-            $license,
+            null,
             $publishYear,
             null,
             null,
@@ -185,11 +185,6 @@ class Fb2Driver extends AbstractDriver
             return (int) $yearNode->nodeValue;
         }
 
-        return null;
-    }
-
-    protected function makeLicense(): ?string
-    {
         return null;
     }
 
@@ -332,7 +327,7 @@ class Fb2Driver extends AbstractDriver
             }
         }
 
-        return \implode(', ', $authors);
+        return $authors ? \implode(', ', $authors) : null;
     }
 
     protected function makeTitle(\DOMElement $titleInfoNode): string

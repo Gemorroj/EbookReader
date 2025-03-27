@@ -10,7 +10,7 @@ use EbookReader\Driver\MobiDriver;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 
-class EbookReaderFactory
+readonly class EbookReaderFactory
 {
     /**
      * @throws UnsupportedFormatException

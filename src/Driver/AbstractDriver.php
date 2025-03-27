@@ -8,7 +8,7 @@ use EbookReader\EbookDriverInterface;
 
 abstract class AbstractDriver implements EbookDriverInterface
 {
-    public function __construct(private string $file)
+    public function __construct(private readonly string $file)
     {
     }
 
