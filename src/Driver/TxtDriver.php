@@ -4,13 +4,26 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Cover\Cover;
 use EbookReader\Data\TxtData;
+use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\TxtMeta;
 
 final class TxtDriver extends AbstractDriver
 {
     private ?string $internalFile = null;
+    /**
+     * @var string[]
+     */
+    protected array $coverFilenames = [
+        'cover',
+        'img',
+        'image',
+        'cover_0',
+        'img_0',
+        'image_0',
+    ];
 
     protected function getInternalFile(): string
     {
@@ -103,10 +116,34 @@ final class TxtDriver extends AbstractDriver
         ];
     }
 
-    public function getCover(): ?string
+    public function getCover(): ?EbookCoverInterface
     {
-        // todo
-        throw new \RuntimeException('Not implemented');
+        $cover = null;
+        $zip = new \ZipArchive();
+        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
+        if (true === $res) {
+            for ($i = 0; $i < $zip->numFiles; ++$i) {
+                $fileName = $zip->getNameIndex($i);
+                if (false === $fileName) {
+                    continue;
+                }
+
+                if (\in_array(\pathinfo($fileName, \PATHINFO_FILENAME), $this->coverFilenames, true)) {
+                    $fileContent = $zip->getFromIndex($i);
+                    if (false === $fileContent) {
+                        continue;
+                    }
+                    $mime = $this->getImageMimeDetector()->detect($fileContent);
+                    if ($mime) {
+                        $cover = new Cover($fileContent, $mime);
+                        break;
+                    }
+                }
+            }
+            $zip->close();
+        }
+
+        return $cover;
     }
 
     public function getMeta(): TxtMeta

@@ -6,6 +6,7 @@ namespace EbookReader\Driver;
 
 use EbookReader\Data\Fb2Data;
 use EbookReader\Data\Fb2DataEpigraph;
+use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\Fb2Meta;
 use EbookReader\Resource\Style;
@@ -131,7 +132,7 @@ final class Fb2Driver extends AbstractDriver
         return \implode(' ', $author);
     }
 
-    public function getCover(): ?string
+    public function getCover(): ?EbookCoverInterface
     {
         // todo
         throw new \RuntimeException('Not implemented');

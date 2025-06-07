@@ -37,7 +37,7 @@ print_r($meta); // EbookMetaInterface object
 $data = $ebookReader->getData();
 print_r($data); // EbookDataInterface object
 $cover = $ebookReader->getCover();
-print_r($cover); // binary string or null
+print_r($cover); // EbookCoverInterface object
 
 $ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException exception
 

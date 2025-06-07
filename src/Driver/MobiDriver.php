@@ -7,6 +7,7 @@ namespace EbookReader\Driver;
 use EbookReader\Data\MobiData;
 use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\PalmDocLz77;
+use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\MobiMeta;
 
@@ -141,7 +142,7 @@ final class MobiDriver extends AbstractDriver
         return [$size, $byteCount, $pos];
     }
 
-    public function getCover(): ?string
+    public function getCover(): ?EbookCoverInterface
     {
         // todo
         throw new \RuntimeException('Not implemented');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Data\Epub3Data;
+use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Meta\Epub3Meta;
@@ -139,7 +140,7 @@ final class Epub3Driver extends AbstractDriver
         return $data;
     }
 
-    public function getCover(): ?string
+    public function getCover(): ?EbookCoverInterface
     {
         // todo
         // For Apple's iBooks to identify and use a cover image, it's necessary to add metadata to the opf file identifying the cover image. <meta name="cover" content="[cover image id]" /> where [cover image id] is the id given to the cover image in the manifest section of the OPF file.

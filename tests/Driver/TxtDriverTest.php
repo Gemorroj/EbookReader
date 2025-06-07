@@ -84,6 +84,34 @@ final class TxtDriverTest extends TestCase
         self::assertEmpty($firstData->getStyles(), $file);
     }
 
+    #[DataProvider('filesCoverProvider')]
+    public function testGetCover(
+        string $file,
+        ?string $expectedMime,
+    ): void {
+        $driver = new TxtDriver($file);
+        $cover = $driver->getCover();
+
+        if ($expectedMime) {
+            self::assertSame($expectedMime, $cover->getMime());
+            self::assertNotEmpty($cover->getData());
+        } else {
+            self::assertNull($cover);
+        }
+    }
+
+    public static function filesCoverProvider(): \Generator
+    {
+        yield [
+            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt',
+            null,
+        ];
+        yield [
+            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt.zip',
+            'image/jpeg',
+        ];
+    }
+
     public static function filesDataProvider(): \Generator
     {
         yield [
