@@ -51,7 +51,7 @@ final class MobiDriver extends AbstractDriver
             /* @var DecompressorInterface|null $decompressor */
             if (2 === $palmDocData['compression']) {
                 $decompressor = new PalmDocLz77();
-            } elseif (3 === $palmDocData['compression']) {
+            } elseif (17480 === $palmDocData['compression']) {
                 throw new \RuntimeException('HUFF/CDIC compression is not supported.');
             } else {
                 $decompressor = null;
