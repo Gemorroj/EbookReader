@@ -24,7 +24,7 @@ final class Epub3Driver extends AbstractDriver
     public function isValid(): bool
     {
         try {
-            $this->getPackageNode();
+            $this->makePackageNode();
         } catch (\Throwable $e) {
             return false;
         }
@@ -39,7 +39,7 @@ final class Epub3Driver extends AbstractDriver
      */
     public function getData(): array
     {
-        $packageNode = $this->getPackageNode();
+        $packageNode = $this->packageNode ?? $this->makePackageNode();
         $version = (int) $packageNode->getAttribute('version');
 
         /** @var \DOMElement $manifestNode */
@@ -151,7 +151,7 @@ final class Epub3Driver extends AbstractDriver
 
     public function getMeta(): Epub3Meta
     {
-        $packageNode = $this->getPackageNode();
+        $packageNode = $this->packageNode ?? $this->makePackageNode();
 
         $version = (int) $packageNode->getAttribute('version');
         if (!\in_array($version, [2, 3], true)) {
@@ -348,12 +348,8 @@ final class Epub3Driver extends AbstractDriver
         return \implode(', ', $allAuthors);
     }
 
-    protected function getPackageNode(): \DOMElement
+    protected function makePackageNode(): \DOMElement
     {
-        if ($this->packageNode) {
-            return $this->packageNode;
-        }
-
         $zip = new \ZipArchive();
         $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
         if (true !== $res) {

@@ -25,33 +25,31 @@ final class TxtDriver extends AbstractDriver
         'image_0',
     ];
 
-    protected function getInternalFile(): string
+    protected function makeInternalFile(): string
     {
-        if (!$this->internalFile) {
-            $zip = new \ZipArchive();
-            $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
-            if (true === $res) {
-                $txtFile = null;
-                // get first .txt file
-                for ($i = 0; $i < $zip->numFiles; ++$i) {
-                    $fileName = $zip->getNameIndex($i);
-                    if (false === $fileName) {
-                        continue;
-                    }
-                    if ('txt' === \pathinfo($fileName, \PATHINFO_EXTENSION)) {
-                        $txtFile = $fileName;
-                        break;
-                    }
+        $zip = new \ZipArchive();
+        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
+        if (true === $res) {
+            $txtFile = null;
+            // get first .txt file
+            for ($i = 0; $i < $zip->numFiles; ++$i) {
+                $fileName = $zip->getNameIndex($i);
+                if (false === $fileName) {
+                    continue;
                 }
-                $zip->close();
-                if (null === $txtFile) {
-                    throw new ParserException();
+                if ('txt' === \pathinfo($fileName, \PATHINFO_EXTENSION)) {
+                    $txtFile = $fileName;
+                    break;
                 }
-
-                $this->internalFile = 'zip://'.$this->getFile().'#'.$txtFile;
-            } else {
-                $this->internalFile = 'file://'.$this->getFile();
             }
+            $zip->close();
+            if (null === $txtFile) {
+                throw new ParserException();
+            }
+
+            $this->internalFile = 'zip://'.$this->getFile().'#'.$txtFile;
+        } else {
+            $this->internalFile = 'file://'.$this->getFile();
         }
 
         return $this->internalFile;
@@ -66,7 +64,8 @@ final class TxtDriver extends AbstractDriver
     {
         $result = true;
         try {
-            $f = new \SplFileObject($this->getInternalFile(), 'r');
+            $file = $this->internalFile ?? $this->makeInternalFile();
+            $f = new \SplFileObject($file, 'r');
             $line1 = $f->fgets();
             $line2 = $f->fgets();
             $line3 = $f->fgets();
@@ -88,7 +87,8 @@ final class TxtDriver extends AbstractDriver
     public function getData(): array
     {
         try {
-            $f = new \SplFileObject($this->getInternalFile(), 'r');
+            $file = $this->internalFile ?? $this->makeInternalFile();
+            $f = new \SplFileObject($file, 'r');
         } catch (\Exception $e) {
             throw new ParserException(previous: $e);
         }
@@ -149,7 +149,8 @@ final class TxtDriver extends AbstractDriver
     public function getMeta(): TxtMeta
     {
         try {
-            $f = new \SplFileObject($this->getInternalFile(), 'r');
+            $file = $this->internalFile ?? $this->makeInternalFile();
+            $f = new \SplFileObject($file, 'r');
         } catch (\Exception $e) {
             throw new ParserException(previous: $e);
         }

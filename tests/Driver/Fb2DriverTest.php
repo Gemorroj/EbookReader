@@ -117,6 +117,42 @@ final class Fb2DriverTest extends TestCase
         }
     }
 
+    #[DataProvider('filesCoverProvider')]
+    public function testGetCover(
+        string $file,
+        ?string $expectedMime,
+    ): void {
+        $driver = new Fb2Driver($file);
+        $cover = $driver->getCover();
+
+        if ($expectedMime) {
+            self::assertSame($expectedMime, $cover->getMime());
+            self::assertNotEmpty($cover->getData());
+        } else {
+            self::assertNull($cover);
+        }
+    }
+
+    public static function filesCoverProvider(): \Generator
+    {
+        yield [
+            __DIR__.'/../fixtures/fb2/evgeniy-onegin.zip',
+            'image/jpeg',
+        ];
+        yield [
+            __DIR__.'/../fixtures/fb2/fb2.fb2',
+            'image/jpeg',
+        ];
+        yield [
+            __DIR__.'/../fixtures/fb2/fb2.zip',
+            'image/jpeg',
+        ];
+        yield [
+            __DIR__.'/../fixtures/fb2/mayakovskiy.fb2',
+            'image/jpeg',
+        ];
+    }
+
     public static function filesDataProvider(): \Generator
     {
         yield [

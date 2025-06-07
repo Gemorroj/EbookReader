@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Cover\Cover;
 use EbookReader\Data\Fb2Data;
 use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\EbookCoverInterface;
@@ -20,9 +21,6 @@ use EbookReader\Resource\StyleType;
 final class Fb2Driver extends AbstractDriver
 {
     private ?string $internalFile = null;
-    private ?\DOMElement $fictionBookDescription = null;
-    private ?\DOMElement $fictionBookStylesheet = null;
-    private ?\DOMElement $fictionBookBody = null;
 
     public function isValid(): bool
     {
@@ -134,8 +132,26 @@ final class Fb2Driver extends AbstractDriver
 
     public function getCover(): ?EbookCoverInterface
     {
-        // todo
-        throw new \RuntimeException('Not implemented');
+        // http://www.fictionbook.org/index.php/%D0%AD%D0%BB%D0%B5%D0%BC%D0%B5%D0%BD%D1%82_coverpage
+
+        $descriptionNode = $this->getFictionBookDescription();
+        /** @var \DOMElement $titleInfoNode */
+        $titleInfoNode = $descriptionNode->getElementsByTagName('title-info')->item(0);
+
+        /** @var \DOMElement|null $coverpageNode */
+        $coverpageNode = $titleInfoNode->getElementsByTagName('coverpage')->item(0);
+        if ($coverpageNode) {
+            /** @var \DOMElement $imageNode */
+            $imageNode = $coverpageNode->getElementsByTagName('image')->item(0);
+            $link = \ltrim($imageNode->attributes->getNamedItem('href')->nodeValue, '#');
+            $node = $this->getFictionBookBinaryById($link);
+
+            $data = \base64_decode($node->textContent);
+
+            return new Cover($data, $node->getAttribute('content-type'));
+        }
+
+        return null;
     }
 
     public function getMeta(): Fb2Meta
@@ -336,22 +352,20 @@ final class Fb2Driver extends AbstractDriver
         return $titleInfoNode->getElementsByTagName('book-title')->item(0)->nodeValue;
     }
 
-    protected function getInternalFile(): string
+    protected function makeInternalFile(): string
     {
-        if (!$this->internalFile) {
-            $zip = new \ZipArchive();
-            $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
-            if (true === $res) {
-                $fb2File = $zip->getNameIndex(0); // get first file in archive
-                $zip->close();
-                if (false === $fb2File) {
-                    throw new ParserException();
-                }
-
-                $this->internalFile = 'zip://'.$this->getFile().'#'.$fb2File;
-            } else {
-                $this->internalFile = 'file://'.$this->getFile();
+        $zip = new \ZipArchive();
+        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
+        if (true === $res) {
+            $fb2File = $zip->getNameIndex(0); // get first file in archive
+            $zip->close();
+            if (false === $fb2File) {
+                throw new ParserException();
             }
+
+            $this->internalFile = 'zip://'.$this->getFile().'#'.$fb2File;
+        } else {
+            $this->internalFile = 'file://'.$this->getFile();
         }
 
         return $this->internalFile;
@@ -359,11 +373,7 @@ final class Fb2Driver extends AbstractDriver
 
     protected function getFictionBookDescription(): \DOMElement
     {
-        if ($this->fictionBookDescription) {
-            return $this->fictionBookDescription;
-        }
-
-        $file = $this->getInternalFile();
+        $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
         $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
@@ -380,9 +390,7 @@ final class Fb2Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                $this->fictionBookDescription = $descriptionNode;
-
-                return $this->fictionBookDescription;
+                return $descriptionNode;
             }
         }
 
@@ -392,11 +400,7 @@ final class Fb2Driver extends AbstractDriver
 
     protected function getFictionBookStylesheet(): ?\DOMElement
     {
-        if ($this->fictionBookStylesheet) {
-            return $this->fictionBookStylesheet;
-        }
-
-        $file = $this->getInternalFile();
+        $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
         $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
@@ -413,9 +417,7 @@ final class Fb2Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                $this->fictionBookStylesheet = $stylesheetNode;
-
-                return $this->fictionBookStylesheet;
+                return $stylesheetNode;
             }
         }
 
@@ -426,11 +428,7 @@ final class Fb2Driver extends AbstractDriver
 
     protected function getFictionBookBody(): \DOMElement
     {
-        if ($this->fictionBookBody) {
-            return $this->fictionBookBody;
-        }
-
-        $file = $this->getInternalFile();
+        $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
         $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
@@ -447,9 +445,34 @@ final class Fb2Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                $this->fictionBookBody = $bodyNode;
+                return $bodyNode;
+            }
+        }
 
-                return $this->fictionBookBody;
+        $reader->close();
+        throw new ParserException();
+    }
+
+    protected function getFictionBookBinaryById(string $id): \DOMElement
+    {
+        $file = $this->internalFile ?? $this->makeInternalFile();
+
+        /** @var \XMLReader|false $reader */
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        if (!$reader) {
+            throw new ParserException();
+        }
+
+        while ($reader->read()) {
+            if (\XMLReader::ELEMENT === $reader->nodeType && 'binary' === $reader->name && $id === $reader->getAttribute('id')) {
+                /** @var \DOMElement|false $binaryNode */
+                $binaryNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
+                $reader->close();
+                if (!$binaryNode) {
+                    throw new ParserException();
+                }
+
+                return $binaryNode;
             }
         }
 
