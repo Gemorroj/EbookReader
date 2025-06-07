@@ -96,6 +96,38 @@ final class Epub3DriverTest extends TestCase
         self::assertSame($expectedPublishDay, $meta->getPublishDay());
     }
 
+    #[DataProvider('filesCoverProvider')]
+    public function testGetCover(
+        string $file,
+        ?string $expectedMime,
+    ): void {
+        $driver = new Epub3Driver($file);
+        $cover = $driver->getCover();
+
+        if ($expectedMime) {
+            self::assertSame($expectedMime, $cover->getMime());
+            self::assertNotEmpty($cover->getData());
+        } else {
+            self::assertNull($cover);
+        }
+    }
+
+    public static function filesCoverProvider(): \Generator
+    {
+        yield [
+            __DIR__.'/../fixtures/epub/epub3-opf2.epub',
+            'image/jpeg',
+        ];
+        yield [
+            __DIR__.'/../fixtures/epub/epub3-opf3.epub',
+            'image/png',
+        ];
+        yield [
+            __DIR__.'/../fixtures/epub/mayakovskiy-opf2.epub',
+            'image/jpeg',
+        ];
+    }
+
     #[DataProvider('filesProviderFake')]
     public function testGetMetaFake(string $file): void
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Cover\Cover;
 use EbookReader\Data\Epub3Data;
 use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
@@ -142,11 +143,59 @@ final class Epub3Driver extends AbstractDriver
 
     public function getCover(): ?EbookCoverInterface
     {
-        // todo
-        // For Apple's iBooks to identify and use a cover image, it's necessary to add metadata to the opf file identifying the cover image. <meta name="cover" content="[cover image id]" /> where [cover image id] is the id given to the cover image in the manifest section of the OPF file.
         // https://wiki.mobileread.com/wiki/Ebook_Covers
-        // for manifest check `id="cover` and `media-type="image/`
-        throw new \RuntimeException('Not implemented');
+
+        $packageNode = $this->packageNode ?? $this->makePackageNode();
+        /** @var \DOMElement $metadataNode */
+        $metadataNode = $packageNode->getElementsByTagName('metadata')->item(0);
+        $metaNodeList = $metadataNode->getElementsByTagName('meta');
+
+        $manifestId = null;
+        /** @var \DOMElement $metaNode */
+        foreach ($metaNodeList as $metaNode) {
+            $name = $metaNode->getAttribute('name');
+            if ('cover' === $name) {
+                $manifestId = $metaNode->getAttribute('content');
+                break;
+            }
+        }
+
+        /** @var \DOMElement[] $potentialCoverNodes */
+        $potentialCoverNodes = [];
+        /** @var \DOMElement $manifestNode */
+        $manifestNode = $packageNode->getElementsByTagName('manifest')->item(0);
+        $manifestItemsNode = $manifestNode->getElementsByTagName('item');
+        /** @var \DOMElement $manifestItemNode */
+        foreach ($manifestItemsNode as $manifestItemNode) {
+            if ($manifestId && $manifestId === $manifestItemNode->getAttribute('id') && \str_starts_with($manifestItemNode->getAttribute('media-type'), 'image/')) {
+                \array_unshift($potentialCoverNodes, $manifestItemNode);
+            } elseif (\in_array($manifestItemNode->getAttribute('id'), ['cover', 'cover-image', 'cover-img'], true) && \str_starts_with($manifestItemNode->getAttribute('media-type'), 'image/')) {
+                $potentialCoverNodes[] = $manifestItemNode;
+            }
+        }
+
+        $potentialCoverNode = $potentialCoverNodes[0] ?? null;
+        if (!$potentialCoverNode) {
+            return null;
+        }
+
+        $mime = $potentialCoverNode->getAttribute('media-type');
+        $file = $potentialCoverNode->getAttribute('href');
+        $zipFilePath = '.' === $this->packageDirectory ? $file : $this->packageDirectory.'/'.$file;
+
+        $zip = new \ZipArchive();
+        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
+        if (true !== $res) {
+            throw new ParserException();
+        }
+        $content = $zip->getFromName($zipFilePath);
+        if (false === $content) {
+            $zip->close();
+            throw new ParserException();
+        }
+        $zip->close();
+
+        return new Cover($content, $mime);
     }
 
     public function getMeta(): Epub3Meta
