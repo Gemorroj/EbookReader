@@ -259,7 +259,19 @@ final class MobiDriver extends AbstractDriver
     protected function parsePalmDb(\SplFileObject $f): array
     {
         $name = \mb_trim($f->fread(32));
+        /*
+            bit field.
+            0x0002 Read-Only
+            0x0004 Dirty AppInfoArea
+            0x0008 Backup this database (i.e. no conduit exists)
+            0x0010 (16 decimal) Okay to install newer over existing copy, if present on PalmPilot
+            0x0020 (32 decimal) Force the PalmPilot to reset after this database is installed
+            0x0040 (64 decimal) Don't allow copy of file to be beamed to other Pilot.
+         */
         $attributes = \hexdec(\bin2hex($f->fread(2)));
+        if (\in_array($attributes, [0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040], true)) {
+            throw new ParserException();
+        }
         $version = \hexdec(\bin2hex($f->fread(2)));
         $creationDate = \hexdec(\bin2hex($f->fread(4)));
         $modificationDate = \hexdec(\bin2hex($f->fread(4)));

@@ -44,17 +44,29 @@ final class TxtDriver extends AbstractDriver
         return $this->internalFile;
     }
 
+    protected function isBinary(string $data): bool
+    {
+        return !\mb_check_encoding($data, 'UTF-8');
+    }
+
     public function isValid(): bool
     {
+        $result = true;
         try {
             $f = new \SplFileObject($this->getInternalFile(), 'r');
+            $line1 = $f->fgets();
+            $line2 = $f->fgets();
+            $line3 = $f->fgets();
+            if ($this->isBinary($line1.$line2.$line3)) {
+                $result = false;
+            }
         } catch (\Exception $e) {
             return false;
         } finally {
             unset($f); // close file
         }
 
-        return true;
+        return $result;
     }
 
     /**

@@ -34,10 +34,12 @@ use EbookReader\Driver\Epub3Driver;
 $ebookReader = EbookReaderFactory::create('file.epub');
 $meta = $ebookReader->getMeta();
 print_r($meta); // EbookMetaInterface object
-
+$data = $ebookReader->getData();
+print_r($data); // EbookDataInterface object
+$cover = $ebookReader->getCover();
+print_r($cover); // binary string or null
 
 $ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException exception
-
 
 $driver = new Epub3Driver('fake.file');
 var_dump($driver->isValid()); // false

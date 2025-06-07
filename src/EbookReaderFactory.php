@@ -7,6 +7,7 @@ namespace EbookReader;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Driver\MobiDriver;
+use EbookReader\Driver\TxtDriver;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 
@@ -32,6 +33,10 @@ readonly class EbookReaderFactory
         $fb2Driver = new Fb2Driver($file);
         if ($fb2Driver->isValid()) {
             return $fb2Driver;
+        }
+        $txtDriver = new TxtDriver($file);
+        if ($txtDriver->isValid()) {
+            return $txtDriver;
         }
 
         throw new UnsupportedFormatException();
