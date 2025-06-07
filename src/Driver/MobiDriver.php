@@ -14,6 +14,7 @@ use EbookReader\Meta\MobiMeta;
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI
  * @see https://github.com/choccybiccy/mobi
+ * @see https://github.com/rodzyk/readiverse
  */
 final class MobiDriver extends AbstractDriver
 {
@@ -183,7 +184,7 @@ final class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{author: string|null, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null}
+     * @return array{author: string|null, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: string|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -203,6 +204,7 @@ final class MobiDriver extends AbstractDriver
             'publishDate' => null,
             'language' => null,
             'license' => null,
+            'coveroffset' => null,
         ];
         for ($i = 0; $i < $records; ++$i) {
             $rawType = $f->fread(4);
@@ -214,8 +216,8 @@ final class MobiDriver extends AbstractDriver
                 throw new ParserException();
             }
 
-            $type = (int) \hexdec(\bin2hex($rawType));
-            $length = (int) \hexdec(\bin2hex($rawLength));
+            $type = \hexdec(\bin2hex($rawType));
+            $length = \hexdec(\bin2hex($rawLength));
 
             if ($length > 0) {
                 $data = $f->fread($length - 8);
@@ -245,6 +247,9 @@ final class MobiDriver extends AbstractDriver
                     break;
                 case 524:
                     $meta['language'] = $data;
+                    break;
+                case 201:
+                    $meta['coveroffset'] = $data;
                     break;
             }
         }
