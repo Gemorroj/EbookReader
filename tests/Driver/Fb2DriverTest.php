@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 final class Fb2DriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
-    public function testIsValid(string $file): void
+    public function testIsValid(string $file, ...$args): void
     {
         $driver = new Fb2Driver($file);
         $result = $driver->isValid();

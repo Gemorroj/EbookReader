@@ -255,7 +255,7 @@ final class Epub3Driver extends AbstractDriver
         $descriptionNode = $metadataNode->getElementsByTagName('description')->item(0);
 
         if ($descriptionNode) {
-            return \trim($descriptionNode->nodeValue);
+            return \mb_trim($descriptionNode->nodeValue);
         }
 
         return null;

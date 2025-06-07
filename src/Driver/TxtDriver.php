@@ -1,0 +1,122 @@
+<?php
+
+declare(strict_types=1);
+
+namespace EbookReader\Driver;
+
+use EbookReader\Data\TxtData;
+use EbookReader\Exception\ParserException;
+use EbookReader\Meta\TxtMeta;
+
+final class TxtDriver extends AbstractDriver
+{
+    private ?string $internalFile = null;
+
+    protected function getInternalFile(): string
+    {
+        if (!$this->internalFile) {
+            $zip = new \ZipArchive();
+            $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
+            if (true === $res) {
+                $txtFile = null;
+                // get first .txt file
+                for ($i = 0; $i < $zip->numFiles; ++$i) {
+                    $fileName = $zip->getNameIndex($i);
+                    if (false === $fileName) {
+                        continue;
+                    }
+                    if ('txt' === \pathinfo($fileName, \PATHINFO_EXTENSION)) {
+                        $txtFile = $fileName;
+                        break;
+                    }
+                }
+                $zip->close();
+                if (null === $txtFile) {
+                    throw new ParserException();
+                }
+
+                $this->internalFile = 'zip://'.$this->getFile().'#'.$txtFile;
+            } else {
+                $this->internalFile = 'file://'.$this->getFile();
+            }
+        }
+
+        return $this->internalFile;
+    }
+
+    public function isValid(): bool
+    {
+        try {
+            $f = new \SplFileObject($this->getInternalFile(), 'r');
+        } catch (\Exception $e) {
+            return false;
+        } finally {
+            unset($f); // close file
+        }
+
+        return true;
+    }
+
+    /**
+     * @return TxtData[]
+     */
+    public function getData(): array
+    {
+        try {
+            $f = new \SplFileObject($this->getInternalFile(), 'r');
+        } catch (\Exception $e) {
+            throw new ParserException(previous: $e);
+        }
+
+        try {
+            $text = '';
+            while (!$f->eof()) {
+                $text .= $f->fread(4096);
+            }
+        } finally {
+            unset($f); // close file
+        }
+
+        $text = \mb_trim($text);
+        $pos = \strpos($text, "\n");
+        if (false !== $pos) {
+            $title = \substr($text, 0, $pos);
+            $title = \mb_trim($title);
+        } else {
+            $title = null;
+        }
+
+        return [
+            new TxtData($text, $title, []),
+        ];
+    }
+
+    public function getCover(): ?string
+    {
+        // todo
+        throw new \RuntimeException('Not implemented');
+    }
+
+    public function getMeta(): TxtMeta
+    {
+        try {
+            $f = new \SplFileObject($this->getInternalFile(), 'r');
+        } catch (\Exception $e) {
+            throw new ParserException(previous: $e);
+        }
+
+        try {
+            $text = '';
+            while (!$f->eof()) {
+                $text = \mb_trim($f->fgets());
+                if ('' !== $text) {
+                    break;
+                }
+            }
+        } finally {
+            unset($f); // close file
+        }
+
+        return new TxtMeta($text);
+    }
+}

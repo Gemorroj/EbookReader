@@ -9,13 +9,15 @@
 - EPUB
 - MOBI
 - FB2, FB2-ZIP
+- TXT, TXT-ZIP
 
 
 ### Requirements:
-- PHP >= 8.2
+- PHP >= 8.4
 - ext-zip
 - ext-dom
 - ext-xmlreader
+- ext-mbstring
 
 
 ### Installation:

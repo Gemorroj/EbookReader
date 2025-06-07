@@ -26,6 +26,8 @@ final class MobiDriver extends AbstractDriver
             $exthData = $this->parseExth($f);
         } catch (\Exception $e) {
             return false;
+        } finally {
+            unset($f); // close file
         }
 
         return true;
@@ -256,7 +258,7 @@ final class MobiDriver extends AbstractDriver
      */
     protected function parsePalmDb(\SplFileObject $f): array
     {
-        $name = \trim($f->fread(32));
+        $name = \mb_trim($f->fread(32));
         $attributes = \hexdec(\bin2hex($f->fread(2)));
         $version = \hexdec(\bin2hex($f->fread(2)));
         $creationDate = \hexdec(\bin2hex($f->fread(4)));

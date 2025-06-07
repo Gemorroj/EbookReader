@@ -1,7 +1,7 @@
 {
     "name": "gemorroj/ebook-reader",
     "description": "E-books reader",
-    "keywords": ["ebook","mobi","epub","fb2"],
+    "keywords": ["ebook","mobi","epub","fb2","txt"],
     "type": "library",
     "license": "LGPL-3.0-or-later",
     "authors": [
@@ -10,14 +10,15 @@
         }
     ],
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.4",
         "ext-zip": "*",
         "ext-dom": "*",
         "ext-xmlreader": "*",
-        "ext-libxml": "*"
+        "ext-libxml": "*",
+        "ext-mbstring": "*"
     },
     "require-dev": {
-        "phpunit/phpunit": "^11.5.15",
+        "phpunit/phpunit": "^12.2.1",
         "friendsofphp/php-cs-fixer": "^3.75",
         "phpstan/phpstan": "^2.1"
     },

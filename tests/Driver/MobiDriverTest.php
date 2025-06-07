@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 final class MobiDriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
-    public function testIsValid(string $file): void
+    public function testIsValid(string $file, ...$args): void
     {
         $driver = new MobiDriver($file);
         $result = $driver->isValid();

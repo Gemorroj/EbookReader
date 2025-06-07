@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 final class Epub3DriverTest extends TestCase
 {
     #[DataProvider('filesMetaProvider')]
-    public function testIsValid(string $file): void
+    public function testIsValid(string $file, ...$args): void
     {
         $driver = new Epub3Driver($file);
         $result = $driver->isValid();

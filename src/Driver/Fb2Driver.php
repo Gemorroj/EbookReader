@@ -241,7 +241,7 @@ final class Fb2Driver extends AbstractDriver
                 }
             }
 
-            return \trim(\implode('', $text));
+            return \mb_trim(\implode('', $text));
         }
 
         return null;
