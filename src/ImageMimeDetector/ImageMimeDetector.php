@@ -24,22 +24,22 @@ final class ImageMimeDetector implements ImageMimeDetectorInterface
         return null;
     }
 
-    protected function isJpeg(string $data): bool
+    private function isJpeg(string $data): bool
     {
         return \str_starts_with($data, \chr(0xFF).\chr(0xD8));
     }
 
-    protected function isPng(string $data): bool
+    private function isPng(string $data): bool
     {
         return \str_starts_with($data, \chr(0x89).'PNG');
     }
 
-    protected function isGif(string $data): bool
+    private function isGif(string $data): bool
     {
         return \str_starts_with($data, 'GI');
     }
 
-    protected function isSvg(string $data): bool
+    private function isSvg(string $data): bool
     {
         $data = \trim($data);
         $bytes = \strtolower(\substr($data, 0, 4));

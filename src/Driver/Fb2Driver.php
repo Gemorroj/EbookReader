@@ -83,7 +83,7 @@ final class Fb2Driver extends AbstractDriver
         $text = [];
         /** @var \DOMElement|\DOMNode|\DOMNameSpaceNode $childNode */
         foreach ($node->childNodes as $childNode) {
-            if (!($childNode instanceof \DOMElement)) {
+            if (!$childNode instanceof \DOMElement) {
                 if ($rowFrame) {
                     $text[] = '<p>'.$childNode->nodeValue.'</p>';
                 } else {
