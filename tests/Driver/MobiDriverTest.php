@@ -129,6 +129,23 @@ final class MobiDriverTest extends TestCase
         self::assertNotSame('', $resources[0]->getData());
     }
 
+    #[DataProvider('coverProvider')]
+    public function testGetCover(string $file, string $expectedMime): void
+    {
+        $cover = new MobiDriver(__DIR__.'/../fixtures/mobi/'.$file)->getCover();
+
+        self::assertNotNull($cover);
+        self::assertSame($expectedMime, $cover->getMime());
+        self::assertNotSame('', $cover->getData());
+    }
+
+    public static function coverProvider(): \Generator
+    {
+        yield ['mobi.mobi', 'image/jpeg'];
+        yield ['mayakovskiy.mobi', 'image/jpeg'];
+        yield ['huffcdic.mobi', 'image/jpeg'];
+    }
+
     public function testHuffCdic(): void
     {
         $file = \tempnam(\sys_get_temp_dir(), 'mobi');

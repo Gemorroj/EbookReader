@@ -302,6 +302,10 @@ final class Epub3Driver extends AbstractDriver
             $zip->close();
         }
 
+        if ('' === $mime) {
+            $mime = $this->getImageMimeDetector()->detect($content) ?? '';
+        }
+
         return new Cover($content, $mime);
     }
 

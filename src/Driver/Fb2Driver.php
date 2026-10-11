@@ -198,9 +198,8 @@ final class Fb2Driver extends AbstractDriver
         if ($coverpageNode) {
             /** @var \DOMElement|null $imageNode */
             $imageNode = $coverpageNode->getElementsByTagName('image')->item(0);
-            $href = $imageNode?->attributes?->getNamedItem('href')?->nodeValue;
-            if (null !== $href) {
-                $link = \ltrim($href, '#');
+            if (null !== $imageNode) {
+                $link = \ltrim($this->getHrefAttribute($imageNode), '#');
                 if ('' !== $link) {
                     $node = $this->getFictionBookBinaryById($link);
 

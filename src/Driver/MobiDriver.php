@@ -323,8 +323,43 @@ final class MobiDriver extends AbstractDriver
 
     public function getCover(): ?Cover
     {
-        // todo
-        throw new \RuntimeException('Not implemented');
+        try {
+            $f = new \SplFileObject($this->getFile(), 'r');
+        } catch (\Exception $e) {
+            throw new ParserException(previous: $e);
+        }
+
+        try {
+            $palmDbData = $this->parsePalmDb($f);
+            $this->parsePalmDoc($f);
+            $mobiData = $this->parseMobiHeader($f);
+            $exthData = $this->parseExth($f);
+
+            $coverOffset = $exthData['coveroffset'];
+            if (null === $coverOffset) {
+                return null;
+            }
+
+            $fileSize = \filesize($this->getFile());
+            if (false === $fileSize) {
+                throw new ParserException();
+            }
+
+            $recordIndex = $mobiData['first_image_index'] + $coverOffset;
+            if ($recordIndex <= 0 || !isset($palmDbData['records'][$recordIndex])) {
+                return null;
+            }
+
+            $data = $this->readRecord($f, $palmDbData['records'], $recordIndex, $fileSize);
+            $mime = $this->getImageMimeDetector()->detect($data);
+            if (null === $mime) {
+                return null;
+            }
+
+            return new Cover($data, $mime);
+        } finally {
+            unset($f); // close file
+        }
     }
 
     public function getMeta(): MobiMeta
@@ -368,7 +403,7 @@ final class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{author: string|null, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: string|null}
+     * @return array{author: string|null, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -418,8 +453,9 @@ final class MobiDriver extends AbstractDriver
                 case 524:
                     $meta['language'] = $data;
                     break;
-                case 201:
-                    $meta['coveroffset'] = $data;
+                case 201: // cover offset: 4-byte big-endian, added to the first image index
+                    $unpacked = \unpack('N', \substr($data, 0, 4));
+                    $meta['coveroffset'] = false !== $unpacked ? $unpacked[1] : null;
                     break;
             }
         }
