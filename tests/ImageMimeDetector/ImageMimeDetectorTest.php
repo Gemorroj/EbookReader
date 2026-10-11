@@ -34,5 +34,13 @@ final class ImageMimeDetectorTest extends TestCase
         yield ['random string', null];
         yield ['', null];
         yield ['<?xml version="1.0"?><html></html>', null];
+        yield ['RIFF'.\str_repeat("\x00", 4).'WEBPVP8 ', 'image/webp'];
+        yield ['RIFF'.\str_repeat("\x00", 4).'WAVE', null];
+        yield ['BM'.\str_repeat("\x00", 10), 'image/bmp'];
+        yield ["II\x2A\x00".\str_repeat("\x00", 4), 'image/tiff'];
+        yield ["MM\x00\x2A".\str_repeat("\x00", 4), 'image/tiff'];
+        yield ["\x00\x00\x01\x00".\str_repeat("\x00", 4), 'image/x-icon'];
+        yield ['II', null];
+        yield ["\x00\x00\x01", null];
     }
 }

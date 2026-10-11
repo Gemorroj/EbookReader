@@ -17,6 +17,18 @@ final class ImageMimeDetector implements ImageMimeDetectorInterface
         if ($this->isGif($data)) {
             return 'image/gif';
         }
+        if ($this->isWebp($data)) {
+            return 'image/webp';
+        }
+        if ($this->isBmp($data)) {
+            return 'image/bmp';
+        }
+        if ($this->isTiff($data)) {
+            return 'image/tiff';
+        }
+        if ($this->isIco($data)) {
+            return 'image/x-icon';
+        }
         if ($this->isSvg($data)) {
             return 'image/svg+xml';
         }
@@ -37,6 +49,26 @@ final class ImageMimeDetector implements ImageMimeDetectorInterface
     private function isGif(string $data): bool
     {
         return \str_starts_with($data, 'GIF87a') || \str_starts_with($data, 'GIF89a');
+    }
+
+    private function isWebp(string $data): bool
+    {
+        return \str_starts_with($data, 'RIFF') && 'WEBP' === \substr($data, 8, 4);
+    }
+
+    private function isBmp(string $data): bool
+    {
+        return \str_starts_with($data, 'BM');
+    }
+
+    private function isTiff(string $data): bool
+    {
+        return \str_starts_with($data, "II\x2A\x00") || \str_starts_with($data, "MM\x00\x2A");
+    }
+
+    private function isIco(string $data): bool
+    {
+        return \str_starts_with($data, "\x00\x00\x01\x00");
     }
 
     private function isSvg(string $data): bool
