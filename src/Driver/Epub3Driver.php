@@ -11,7 +11,7 @@ use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Format;
 use EbookReader\Meta\Epub3Meta;
 use EbookReader\Meta\PublishDate;
-use EbookReader\Resource\Resource;
+use EbookReader\Resource\Resource as EbookResource;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 use EbookReader\TableOfContents\TableOfContents;
@@ -84,7 +84,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return resource[]
+     * @return EbookResource[]
      */
     private function collectResources(\ZipArchive $zip, \DOMDocument $dom, string $baseDir): array
     {
@@ -110,7 +110,7 @@ final class Epub3Driver extends AbstractDriver
                 continue;
             }
 
-            $resources[] = new Resource($ref, $content, $this->getImageMimeDetector()->detect($content) ?? '');
+            $resources[] = new EbookResource($ref, $content, $this->getImageMimeDetector()->detect($content) ?? '');
         }
 
         return $resources;

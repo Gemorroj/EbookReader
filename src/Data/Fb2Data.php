@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Data;
 
-use EbookReader\Resource\Resource;
+use EbookReader\Resource\Resource as EbookResource;
 use EbookReader\Resource\Style;
 
 final readonly class Fb2Data implements EbookDataInterface
@@ -12,7 +12,7 @@ final readonly class Fb2Data implements EbookDataInterface
     /**
      * @param Fb2DataEpigraph[] $epigraphs
      * @param Style[]           $styles
-     * @param resource[]        $resources
+     * @param EbookResource[]   $resources
      */
     public function __construct(
         private string $text,
@@ -25,7 +25,7 @@ final readonly class Fb2Data implements EbookDataInterface
     }
 
     /**
-     * @return resource[]
+     * @return EbookResource[]
      */
     public function getResources(): array
     {

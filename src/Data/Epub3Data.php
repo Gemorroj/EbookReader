@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace EbookReader\Data;
 
-use EbookReader\Resource\Resource;
+use EbookReader\Resource\Resource as EbookResource;
 use EbookReader\Resource\Style;
 
 final readonly class Epub3Data implements EbookDataInterface
 {
     /**
-     * @param Style[]    $styles
-     * @param resource[] $resources
+     * @param Style[]         $styles
+     * @param EbookResource[] $resources
      */
     public function __construct(
         private string $text,
@@ -23,7 +23,7 @@ final readonly class Epub3Data implements EbookDataInterface
     }
 
     /**
-     * @return resource[]
+     * @return EbookResource[]
      */
     public function getResources(): array
     {

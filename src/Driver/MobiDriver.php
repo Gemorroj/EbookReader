@@ -17,7 +17,7 @@ use EbookReader\Exception\UnsupportedCompressionException;
 use EbookReader\Format;
 use EbookReader\Meta\MobiMeta;
 use EbookReader\Meta\PublishDate;
-use EbookReader\Resource\Resource;
+use EbookReader\Resource\Resource as EbookResource;
 use EbookReader\TableOfContents\TableOfContents;
 
 /**
@@ -124,7 +124,7 @@ final class MobiDriver extends AbstractDriver
      * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
      * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      *
-     * @return resource[]
+     * @return EbookResource[]
      */
     private function collectResources(\SplFileObject $f, array $records, array $mobiData, string $text, int $fileSize): array
     {
@@ -151,7 +151,7 @@ final class MobiDriver extends AbstractDriver
                 continue;
             }
 
-            $resources[] = new Resource($recindex, $data, $mime);
+            $resources[] = new EbookResource($recindex, $data, $mime);
         }
 
         return $resources;

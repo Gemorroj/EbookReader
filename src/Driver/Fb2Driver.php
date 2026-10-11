@@ -11,7 +11,7 @@ use EbookReader\Exception\ParserException;
 use EbookReader\Format;
 use EbookReader\Meta\Fb2Meta;
 use EbookReader\Meta\PublishDate;
-use EbookReader\Resource\Resource;
+use EbookReader\Resource\Resource as EbookResource;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 use EbookReader\TableOfContents\TableOfContents;
@@ -93,7 +93,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return resource[]
+     * @return EbookResource[]
      */
     private function collectResources(\DOMElement $sectionNode): array
     {
@@ -123,7 +123,7 @@ final class Fb2Driver extends AbstractDriver
                 $mime = $this->getImageMimeDetector()->detect($data) ?? '';
             }
 
-            $resources[] = new Resource($ref, $data, $mime);
+            $resources[] = new EbookResource($ref, $data, $mime);
         }
 
         return $resources;
