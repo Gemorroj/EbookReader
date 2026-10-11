@@ -6,14 +6,21 @@ namespace EbookReader\Tests\Driver;
 
 use EbookReader\Data\MobiData;
 use EbookReader\Driver\MobiDriver;
+use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
-use EbookReader\Tests\Support\HuffCdicFixture;
-use EbookReader\Tests\Support\MobiFixture;
+use EbookReader\Exception\UnsupportedCompressionException;
+use EbookReader\Format;
+use EbookReader\Tests\Decompressor\HuffCdicFixture;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class MobiDriverTest extends TestCase
 {
+    public function testGetFormat(): void
+    {
+        self::assertSame(Format::MOBI, new MobiDriver('file.mobi')->getFormat());
+    }
+
     #[DataProvider('filesProvider')]
     public function testIsValid(string $file, mixed ...$args): void
     {
@@ -94,7 +101,7 @@ final class MobiDriverTest extends TestCase
 
     public function testUnsupportedCompression(): void
     {
-        $this->expectException(ParserException::class);
+        $this->expectException(UnsupportedCompressionException::class);
 
         $this->withMobi(
             MobiFixture::build('Title', 99, 65001, 1, 1, ['x']),
@@ -129,6 +136,59 @@ final class MobiDriverTest extends TestCase
         self::assertNotSame('', $resources[0]->getData());
     }
 
+    public function testTableOfContents(): void
+    {
+        $contents = new MobiDriver(__DIR__.'/../fixtures/mobi/palmodoc-cyrillic.mobi')->getTableOfContents();
+
+        self::assertCount(49, $contents);
+        self::assertSame('Владимир Маяковский Во весь голос. Стихотворения и поэмы', $contents[0]->getTitle());
+        self::assertSame(1, $contents[0]->getLevel());
+        self::assertSame(0, $contents[0]->getSectionIndex());
+        self::assertSame(7813, $contents[0]->getPosition());
+    }
+
+    public function testNcxSample(): void
+    {
+        $driver = new MobiDriver(__DIR__.'/../fixtures/mobi/ncx.mobi');
+        self::assertTrue($driver->isValid());
+        self::assertSame('libmobi ncx test', $driver->getMeta()->getTitle());
+
+        $contents = $driver->getTableOfContents();
+        self::assertCount(4, $contents);
+        self::assertSame('Test chapter 1', $contents[0]->getTitle());
+        self::assertSame(1, $contents[0]->getLevel());
+        self::assertSame(40, $contents[0]->getPosition());
+        self::assertSame(2, $contents[2]->getLevel());
+    }
+
+    public function testCp1252Sample(): void
+    {
+        $driver = new MobiDriver(__DIR__.'/../fixtures/mobi/cp1252.mobi');
+        self::assertTrue($driver->isValid());
+
+        $meta = $driver->getMeta();
+        self::assertSame('Libmobi test sample', $meta->getTitle());
+        self::assertSame(['Bartek Fabiszewski'], $meta->getAuthors());
+        self::assertNotEmpty($driver->getData()[0]->getText());
+    }
+
+    public function testEncryptedSample(): void
+    {
+        $driver = new MobiDriver(__DIR__.'/../fixtures/mobi/encrypted.mobi');
+        self::assertTrue($driver->isValid());
+
+        $this->expectException(EncryptedBookException::class);
+        $driver->getMeta();
+    }
+
+    public function testMetaAuthors(): void
+    {
+        $meta = new MobiDriver(__DIR__.'/../fixtures/mobi/palmodoc-cyrillic.mobi')->getMeta();
+
+        self::assertSame(['Владимир Владимирович Маяковский'], $meta->getAuthors());
+        self::assertSame('Владимир Владимирович Маяковский', $meta->getAuthor());
+    }
+
     #[DataProvider('coverProvider')]
     public function testGetCover(string $file, string $expectedMime): void
     {
@@ -141,8 +201,7 @@ final class MobiDriverTest extends TestCase
 
     public static function coverProvider(): \Generator
     {
-        yield ['mobi.mobi', 'image/jpeg'];
-        yield ['mayakovskiy.mobi', 'image/jpeg'];
+        yield ['palmodoc-cyrillic.mobi', 'image/jpeg'];
         yield ['huffcdic.mobi', 'image/jpeg'];
     }
 
@@ -215,14 +274,7 @@ final class MobiDriverTest extends TestCase
     public static function filesDataProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/mobi/mobi.mobi',
-            1,
-            'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World',
-            '<html><head><guide><reference type="toc" title="Table of Contents" filepos=0000001279 /></guide></head><body><p height="19em" width="0pt" align="left">Copyright © 2008 by Eric Weiner</p>',
-            '<p height="0pt" width="1em" align="justify">No, the Dutch way is not for me. Perhaps my next destination is the one. I’m heading to a country where the trains run on time, the streets are clean, and tolerance, like everything else, is doled out carefully, in moderation. I am heading to Switzerland.</p><mbp:pagebreak/><a ></a> <a ></a> <a ></a></body></html>',
-        ];
-        yield [
-            __DIR__.'/../fixtures/mobi/mayakovskiy.mobi',
+            __DIR__.'/../fixtures/mobi/palmodoc-cyrillic.mobi',
             1,
             'Во весь голос. Стихотворения и поэмы',
             "<html><head><guide><reference type=\"toc\" title=\"Table of Contents\" filepos=0000231502 /></guide></head><body><p height=\"1em\" width=\"0pt\" align=\"left\"><font size=\"4\"><b><span bgcolor=\"#f1f1f1\">Annotation</span></b></font></p><p height=\"1em\" width=\"2em\" align=\"justify\">Владимир Владимирович Маяковский (1893–1930)\u{a0}– один из крупнейших советских поэтов, новаторское творчество которого имело огромное значение для всей поэзии ХХ века.</p>",
@@ -239,20 +291,7 @@ final class MobiDriverTest extends TestCase
     public static function filesProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/mobi/mobi.mobi',
-            'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World', // title
-            'Eric Weiner', // author
-            'Twelve', // publisher
-            '9780446511070', // isbn
-            'Part foreign affairs discourse, part humor, and part twisted self-help guide, The Geography of Bliss takes the reader from America to Iceland to India in search of happiness, or, in the crabby author\'s case, moments of \'un-unhappiness.\' The book uses a beguiling mixture of travel, psychology, science and humor to investigate not what happiness is, but where it is. Are people in Switzerland happier because it is the most democratic country in the world? Do citizens of Singapore benefit psychologically by having their options limited by the government? Is the King of Bhutan a visionary for his initiative to calculate Gross National Happiness? Why is Asheville, North Carolina so damn happy? With engaging wit and surprising insights, Eric Weiner answers those questions and many others, offering travelers of all moods some interesting new ideas for sunnier destinations and dispositions.', // description
-            'en', // language
-            null, // license
-            2008, // publish year
-            1, // publish month
-            3, // publish day
-        ];
-        yield [
-            __DIR__.'/../fixtures/mobi/mayakovskiy.mobi',
+            __DIR__.'/../fixtures/mobi/palmodoc-cyrillic.mobi',
             'Во весь голос. Стихотворения и поэмы', // title
             'Владимир Владимирович Маяковский', // author
             'АСТ', // publisher

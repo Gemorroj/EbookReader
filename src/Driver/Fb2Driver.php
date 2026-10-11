@@ -8,11 +8,13 @@ use EbookReader\Cover\Cover;
 use EbookReader\Data\Fb2Data;
 use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\Exception\ParserException;
+use EbookReader\Format;
 use EbookReader\Meta\Fb2Meta;
 use EbookReader\Meta\PublishDate;
 use EbookReader\Resource\Resource;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
+use EbookReader\TableOfContents\TableOfContents;
 
 /**
  * @see https://wiki.mobileread.com/wiki/FB2
@@ -22,6 +24,11 @@ use EbookReader\Resource\StyleType;
 final class Fb2Driver extends AbstractDriver
 {
     private ?string $internalFile = null;
+
+    public function getFormat(): Format
+    {
+        return Format::FB2;
+    }
 
     public function isValid(): bool
     {
@@ -219,6 +226,54 @@ final class Fb2Driver extends AbstractDriver
         return null;
     }
 
+    /**
+     * @return TableOfContents[]
+     */
+    public function getTableOfContents(): array
+    {
+        $file = $this->internalFile ?? $this->makeInternalFile();
+
+        /** @var \XMLReader|false $reader */
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        if (!$reader) {
+            throw new ParserException();
+        }
+
+        $entries = [];
+        $sectionIndexes = [];
+        $sectionCount = 0;
+        $inBody = false;
+
+        try {
+            while ($reader->read()) {
+                if (\XMLReader::ELEMENT === $reader->nodeType) {
+                    if ('body' === $reader->name) {
+                        $inBody = true;
+                    } elseif ($inBody && 'section' === $reader->name) {
+                        $sectionIndexes[] = $sectionCount;
+                        ++$sectionCount;
+                    } elseif ($inBody && 'title' === $reader->name) {
+                        $title = \mb_trim(\strip_tags($reader->readInnerXml()));
+                        if ('' !== $title) {
+                            $sectionIndex = \end($sectionIndexes);
+                            $entries[] = new TableOfContents($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex);
+                        }
+                    }
+                } elseif ($inBody && \XMLReader::END_ELEMENT === $reader->nodeType) {
+                    if ('section' === $reader->name) {
+                        \array_pop($sectionIndexes);
+                    } elseif ('body' === $reader->name) {
+                        break;
+                    }
+                }
+            }
+        } finally {
+            $reader->close();
+        }
+
+        return $entries;
+    }
+
     public function getMeta(): Fb2Meta
     {
         $descriptionNode = $this->getFictionBookDescription();
@@ -230,23 +285,42 @@ final class Fb2Driver extends AbstractDriver
         $publishNodeInfo = $descriptionNode->getElementsByTagName('publish-info')->item(0);
 
         $title = $this->makeTitle($titleInfoNode);
-        $author = $this->makeAuthor($titleInfoNode);
+        $authors = $this->makeAuthors($titleInfoNode);
         $publisher = $publishNodeInfo ? $this->makePublisher($publishNodeInfo) : null;
         $isbn = $publishNodeInfo ? $this->makeIsbn($publishNodeInfo) : null;
         $description = $this->makeDescription($titleInfoNode);
         $language = $this->makeLanguage($titleInfoNode);
         $publishYear = $this->makePublishYear($publishNodeInfo);
+        $subjects = $this->makeSubjects($titleInfoNode);
 
         return new Fb2Meta(
-            $title,
-            $author,
-            $publisher,
-            $isbn,
-            $description,
-            $language,
-            null,
-            new PublishDate($publishYear),
+            title: $title,
+            authors: $authors,
+            publisher: $publisher,
+            isbn: $isbn,
+            description: $description,
+            language: $language,
+            subjects: $subjects,
+            license: null,
+            publishDate: new PublishDate($publishYear),
         );
+    }
+
+    /**
+     * @return string[]
+     */
+    protected function makeSubjects(\DOMElement $titleInfoNode): array
+    {
+        $subjects = [];
+        /** @var \DOMElement $genreNode */
+        foreach ($titleInfoNode->getElementsByTagName('genre') as $genreNode) {
+            $value = \mb_trim($genreNode->nodeValue);
+            if ('' !== $value) {
+                $subjects[] = $value;
+            }
+        }
+
+        return $subjects;
     }
 
     protected function makePublishYear(?\DOMElement $publishNodeInfo): ?int
@@ -357,7 +431,10 @@ final class Fb2Driver extends AbstractDriver
         return $publisherNode?->nodeValue;
     }
 
-    protected function makeAuthor(\DOMElement $titleInfoNode): ?string
+    /**
+     * @return string[]
+     */
+    protected function makeAuthors(\DOMElement $titleInfoNode): array
     {
         // default minOccurs = 1. so author node is required
         /*
@@ -411,7 +488,7 @@ final class Fb2Driver extends AbstractDriver
             }
         }
 
-        return $authors ? \implode(', ', $authors) : null;
+        return $authors;
     }
 
     protected function makeTitle(\DOMElement $titleInfoNode): string

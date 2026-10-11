@@ -6,7 +6,6 @@ namespace EbookReader\Tests\Decompressor;
 
 use EbookReader\Decompressor\HuffCdic;
 use EbookReader\Exception\ParserException;
-use EbookReader\Tests\Support\HuffCdicFixture;
 use PHPUnit\Framework\TestCase;
 
 final class HuffCdicTest extends TestCase

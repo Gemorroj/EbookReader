@@ -2,15 +2,30 @@
 
 declare(strict_types=1);
 
-namespace EbookReader;
-
-use EbookReader\Meta\PublishDate;
+namespace EbookReader\Meta;
 
 interface EbookMetaInterface
 {
     public function getTitle(): string;
 
+    /**
+     * All authors as a list.
+     *
+     * @return string[]
+     */
+    public function getAuthors(): array;
+
+    /**
+     * Convenience: authors joined by ", ".
+     */
     public function getAuthor(): ?string;
+
+    /**
+     * Subjects / genres as a list.
+     *
+     * @return string[]
+     */
+    public function getSubjects(): array;
 
     public function getPublisher(): ?string;
 

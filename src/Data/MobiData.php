@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace EbookReader\Data;
 
-use EbookReader\EbookDataInterface;
 use EbookReader\Resource\Resource;
 use EbookReader\Resource\Style;
 

@@ -7,7 +7,9 @@ namespace EbookReader\Driver;
 use EbookReader\Cover\Cover;
 use EbookReader\Data\TxtData;
 use EbookReader\Exception\ParserException;
+use EbookReader\Format;
 use EbookReader\Meta\TxtMeta;
+use EbookReader\TableOfContents\TableOfContents;
 
 final class TxtDriver extends AbstractDriver
 {
@@ -59,25 +61,27 @@ final class TxtDriver extends AbstractDriver
         return !\mb_check_encoding($data, 'UTF-8');
     }
 
+    public function getFormat(): Format
+    {
+        return Format::TXT;
+    }
+
     public function isValid(): bool
     {
-        $result = true;
         try {
             $file = $this->internalFile ?? $this->makeInternalFile();
             $f = new \SplFileObject($file, 'r');
-            $line1 = $f->fgets();
-            $line2 = $f->fgets();
-            $line3 = $f->fgets();
-            if ($this->isBinary($line1.$line2.$line3)) {
-                $result = false;
+            $head = $f->fread(4096);
+            if (false === $head) {
+                return false;
             }
+
+            return !$this->isBinary($head);
         } catch (\Throwable $e) {
             return false;
         } finally {
             unset($f); // close file
         }
-
-        return $result;
     }
 
     /**
@@ -143,6 +147,14 @@ final class TxtDriver extends AbstractDriver
         }
 
         return $cover;
+    }
+
+    /**
+     * @return TableOfContents[]
+     */
+    public function getTableOfContents(): array
+    {
+        return [];
     }
 
     public function getMeta(): TxtMeta

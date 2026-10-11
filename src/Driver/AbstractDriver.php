@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\EbookDriverInterface;
 use EbookReader\ImageMimeDetector\ImageMimeDetector;
 use EbookReader\ImageMimeDetector\ImageMimeDetectorInterface;
 

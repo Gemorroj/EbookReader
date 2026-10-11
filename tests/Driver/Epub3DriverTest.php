@@ -8,6 +8,7 @@ use EbookReader\Data\Epub3Data;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
+use EbookReader\Format;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,6 +16,11 @@ use PHPUnit\Framework\TestCase;
 
 final class Epub3DriverTest extends TestCase
 {
+    public function testGetFormat(): void
+    {
+        self::assertSame(Format::EPUB, new Epub3Driver('file.epub')->getFormat());
+    }
+
     #[DataProvider('filesMetaProvider')]
     public function testIsValid(string $file, mixed ...$args): void
     {
@@ -117,15 +123,11 @@ final class Epub3DriverTest extends TestCase
     public static function filesCoverProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/epub/epub3-opf2.epub',
-            'image/jpeg',
-        ];
-        yield [
-            __DIR__.'/../fixtures/epub/epub3-opf3.epub',
+            __DIR__.'/../fixtures/epub/epub3-nav.epub',
             'image/png',
         ];
         yield [
-            __DIR__.'/../fixtures/epub/mayakovskiy-opf2.epub',
+            __DIR__.'/../fixtures/epub/epub2-ncx-cyrillic.epub',
             'image/jpeg',
         ];
     }
@@ -140,7 +142,7 @@ final class Epub3DriverTest extends TestCase
 
     public function testGetMetaEdgeCases(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/edge-cases.epub');
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-missing-meta.epub');
         self::assertTrue($driver->isValid());
 
         $meta = $driver->getMeta();
@@ -151,7 +153,7 @@ final class Epub3DriverTest extends TestCase
 
     public function testGetMetaMonthOnlyDate(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/date-month.epub');
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-date-month.epub');
         self::assertTrue($driver->isValid());
 
         $publishDate = $driver->getMeta()->getPublishDate();
@@ -162,7 +164,7 @@ final class Epub3DriverTest extends TestCase
 
     public function testGetMetaUnsupportedVersion(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/version-unsupported.epub');
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub4-unsupported.epub');
         self::assertTrue($driver->isValid());
 
         $this->expectException(UnsupportedFormatException::class);
@@ -171,13 +173,42 @@ final class Epub3DriverTest extends TestCase
 
     public function testGetCoverWithoutCover(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/edge-cases.epub');
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-missing-meta.epub');
         self::assertNull($driver->getCover());
+    }
+
+    public function testTableOfContentsFromNcx(): void
+    {
+        $contents = new Epub3Driver(__DIR__.'/../fixtures/epub/epub2-ncx-cyrillic.epub')->getTableOfContents();
+
+        self::assertCount(43, $contents);
+        self::assertSame('Владимир Маяковский. Во весь голос. Стихотворения и поэмы', $contents[0]->getTitle());
+        self::assertSame(1, $contents[0]->getLevel());
+        self::assertSame(1, $contents[0]->getSectionIndex());
+    }
+
+    public function testTableOfContentsFromNav(): void
+    {
+        $contents = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-nav.epub')->getTableOfContents();
+
+        self::assertNotEmpty($contents);
+        self::assertSame('BIBLIOGRAPHY', $contents[1]->getTitle());
+        self::assertSame(2, $contents[1]->getLevel());
+        self::assertSame(2, $contents[0]->getSectionIndex());
+    }
+
+    public function testMetaAuthorsAndSubjects(): void
+    {
+        $meta = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-nav.epub')->getMeta();
+
+        self::assertSame('Charles Madison Curry, Erle Elsworth Clippinger', $meta->getAuthor());
+        self::assertCount(2, $meta->getAuthors());
+        self::assertContains('Children -- Books and reading', $meta->getSubjects());
     }
 
     public function testEncodedAndRelativeHref(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/encoded-href.epub');
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-encoded-href.epub');
         self::assertTrue($driver->isValid());
 
         $data = $driver->getData();
@@ -191,12 +222,12 @@ final class Epub3DriverTest extends TestCase
 
     public function testInlineImageResources(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-opf2.epub');
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-nav.epub');
         $resources = $driver->getData()[0]->getResources();
 
         self::assertNotEmpty($resources);
-        self::assertSame('images/GeographyofBli-cover.jpg', $resources[0]->getPath());
-        self::assertSame('image/jpeg', $resources[0]->getMime());
+        self::assertSame('images/cover.png', $resources[0]->getPath());
+        self::assertSame('image/png', $resources[0]->getMime());
         self::assertNotSame('', $resources[0]->getData());
     }
 
@@ -209,15 +240,7 @@ final class Epub3DriverTest extends TestCase
     public static function filesDataProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/epub/epub3-opf2.epub',
-            7,
-            'Cover Image',
-            [new Style('../stylesheet.css', StyleType::LINK), new Style('../page_styles.css', StyleType::LINK)],
-            null,
-            '<div class="calibre"><div class="body"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="100%" height="100%" viewBox="0 0 500 656"><image width="500" height="656" xlink:href="images/GeographyofBli-cover.jpg" transform="translate(0 0)"></image></svg></div></div>',
-        ];
-        yield [
-            __DIR__.'/../fixtures/epub/epub3-opf3.epub',
+            __DIR__.'/../fixtures/epub/epub3-nav.epub',
             3,
             'Children\'s Literature',
             [new Style('css/epub.css', StyleType::LINK)],
@@ -225,7 +248,7 @@ final class Epub3DriverTest extends TestCase
             '<div><img src="images/cover.png" alt="Cover Image" title="Cover Image"></img></div>',
         ];
         yield [
-            __DIR__.'/../fixtures/epub/mayakovskiy-opf2.epub',
+            __DIR__.'/../fixtures/epub/epub2-ncx-cyrillic.epub',
             14,
             'Cover of Во весь голос. Стихотворения и поэмы',
             [new Style('body {padding:0;} img {height: 100%; max-width: 100%;} div {text-align: center; page-break-after: always;}', StyleType::CSS)],
@@ -237,20 +260,7 @@ final class Epub3DriverTest extends TestCase
     public static function filesMetaProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/epub/epub3-opf2.epub',
-            'The Geography of Bliss: One Grump\'s Search for the Happiest Places in the World', // title
-            'Eric Weiner', // author
-            'Twelve', // publisher
-            '9780446511070', // isbn
-            'Part foreign affairs discourse, part humor, and part twisted self-help guide, The Geography of Bliss takes the reader from America to Iceland to India in search of happiness, or, in the crabby author\'s case, moments of \'un-unhappiness.\' The book uses a beguiling mixture of travel, psychology, science and humor to investigate not what happiness is, but where it is. Are people in Switzerland happier because it is the most democratic country in the world? Do citizens of Singapore benefit psychologically by having their options limited by the government? Is the King of Bhutan a visionary for his initiative to calculate Gross National Happiness? Why is Asheville, North Carolina so damn happy? With engaging wit and surprising insights, Eric Weiner answers those questions and many others, offering travelers of all moods some interesting new ideas for sunnier destinations and dispositions.', // description
-            'en', // language
-            'WORLD ALL LANGUAGES', // license
-            2008, // publish year
-            1, // publish month
-            3, // publish day
-        ];
-        yield [
-            __DIR__.'/../fixtures/epub/epub3-opf3.epub',
+            __DIR__.'/../fixtures/epub/epub3-nav.epub',
             'Children\'s Literature, A Textbook of Sources for Teachers and Teacher-Training Classes', // title
             'Charles Madison Curry, Erle Elsworth Clippinger', // author
             null, // publisher
@@ -263,7 +273,7 @@ final class Epub3DriverTest extends TestCase
             20, // publish day
         ];
         yield [
-            __DIR__.'/../fixtures/epub/mayakovskiy-opf2.epub',
+            __DIR__.'/../fixtures/epub/epub2-ncx-cyrillic.epub',
             'Во весь голос. Стихотворения и поэмы', // title
             'Владимир Владимирович Маяковский', // author
             'ООО «ЛитРес», www.litres.ru', // publisher

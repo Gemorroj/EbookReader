@@ -10,10 +10,15 @@ use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\HuffCdic;
 use EbookReader\Decompressor\NoCompression;
 use EbookReader\Decompressor\PalmDocLz77;
+use EbookReader\Driver\Mobi\Index;
+use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
+use EbookReader\Exception\UnsupportedCompressionException;
+use EbookReader\Format;
 use EbookReader\Meta\MobiMeta;
 use EbookReader\Meta\PublishDate;
 use EbookReader\Resource\Resource;
+use EbookReader\TableOfContents\TableOfContents;
 
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI
@@ -22,6 +27,11 @@ use EbookReader\Resource\Resource;
  */
 final class MobiDriver extends AbstractDriver
 {
+    public function getFormat(): Format
+    {
+        return Format::MOBI;
+    }
+
     public function isValid(): bool
     {
         try {
@@ -53,6 +63,7 @@ final class MobiDriver extends AbstractDriver
         try {
             $palmDbData = $this->parsePalmDb($f);
             $palmDocData = $this->parsePalmDoc($f);
+            $this->assertNotEncrypted($palmDocData['encryption']);
             $mobiData = $this->parseMobiHeader($f);
             $this->parseExth($f);
 
@@ -110,8 +121,8 @@ final class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                              $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int} $mobiData
+     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      *
      * @return resource[]
      */
@@ -166,8 +177,8 @@ final class MobiDriver extends AbstractDriver
     /**
      * PalmDOC is self-contained; HUFF/CDIC needs the HUFF + CDIC records read from the PDB.
      *
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                              $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int} $mobiData
+     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      */
     private function createDecompressor(\SplFileObject $f, array $records, array $mobiData, int $compression): DecompressorInterface
     {
@@ -175,13 +186,13 @@ final class MobiDriver extends AbstractDriver
             1 => new NoCompression(),
             2 => new PalmDocLz77(),
             17480 => $this->makeHuffCdic($f, $records, $mobiData),
-            default => throw new ParserException(\sprintf('Unsupported MOBI compression: %d', $compression)),
+            default => throw new UnsupportedCompressionException(\sprintf('Unsupported MOBI compression: %d', $compression)),
         };
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                              $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int} $mobiData
+     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      */
     private function makeHuffCdic(\SplFileObject $f, array $records, array $mobiData): HuffCdic
     {
@@ -331,7 +342,8 @@ final class MobiDriver extends AbstractDriver
 
         try {
             $palmDbData = $this->parsePalmDb($f);
-            $this->parsePalmDoc($f);
+            $palmDocData = $this->parsePalmDoc($f);
+            $this->assertNotEncrypted($palmDocData['encryption']);
             $mobiData = $this->parseMobiHeader($f);
             $exthData = $this->parseExth($f);
 
@@ -362,6 +374,58 @@ final class MobiDriver extends AbstractDriver
         }
     }
 
+    /**
+     * @return TableOfContents[]
+     */
+    public function getTableOfContents(): array
+    {
+        try {
+            $f = new \SplFileObject($this->getFile(), 'r');
+        } catch (\Exception $e) {
+            throw new ParserException(previous: $e);
+        }
+
+        try {
+            $palmDbData = $this->parsePalmDb($f);
+            $palmDocData = $this->parsePalmDoc($f);
+            $this->assertNotEncrypted($palmDocData['encryption']);
+            $mobiData = $this->parseMobiHeader($f);
+
+            $indexOffset = $mobiData['ncx_index'];
+            if (0xFFFFFFFF === $indexOffset || !isset($palmDbData['records'][$indexOffset])) {
+                return [];
+            }
+
+            $fileSize = \filesize($this->getFile());
+            if (false === $fileSize) {
+                throw new ParserException();
+            }
+
+            $records = $palmDbData['records'];
+            $parsed = Index::parse(
+                $indexOffset,
+                fn (int $index): string => $this->readRecord($f, $records, $index, $fileSize),
+                $mobiData['text_encoding'],
+            );
+        } finally {
+            unset($f); // close file
+        }
+
+        $toc = [];
+        foreach ($parsed['entries'] as [$name, $tagMap]) {
+            $title = isset($tagMap[3][0], $parsed['cncx'][$tagMap[3][0]]) ? $parsed['cncx'][$tagMap[3][0]] : $name;
+            $title = \mb_trim($title);
+            if ('' === $title) {
+                continue;
+            }
+
+            $level = isset($tagMap[4][0]) ? $tagMap[4][0] + 1 : 1;
+            $toc[] = new TableOfContents($title, \max(1, $level), 0, $tagMap[1][0] ?? null);
+        }
+
+        return $toc;
+    }
+
     public function getMeta(): MobiMeta
     {
         try {
@@ -372,7 +436,8 @@ final class MobiDriver extends AbstractDriver
 
         try {
             $palmDbData = $this->parsePalmDb($f);
-            $this->parsePalmDoc($f);
+            $palmDocData = $this->parsePalmDoc($f);
+            $this->assertNotEncrypted($palmDocData['encryption']);
             $mobiData = $this->parseMobiHeader($f);
             $exthData = $this->parseExth($f);
 
@@ -387,23 +452,25 @@ final class MobiDriver extends AbstractDriver
         }
 
         $publishDate = $exthData['publishDate'];
+        $encoding = $mobiData['text_encoding'];
 
         return new MobiMeta(
-            $title,
-            $this->decodeNullable($exthData['author'], $mobiData['text_encoding']),
-            $this->decodeNullable($exthData['publisher'], $mobiData['text_encoding']),
-            $this->decodeNullable($exthData['isbn'], $mobiData['text_encoding']),
-            $this->decodeNullable($exthData['description'], $mobiData['text_encoding']),
-            $this->decodeNullable($exthData['language'], $mobiData['text_encoding']),
-            $this->decodeNullable($exthData['license'], $mobiData['text_encoding']),
-            $publishDate
+            title: $title,
+            authors: \array_map(fn (string $value): string => $this->decodeText($value, $encoding), $exthData['authors']),
+            publisher: $this->decodeNullable($exthData['publisher'], $encoding),
+            isbn: $this->decodeNullable($exthData['isbn'], $encoding),
+            description: $this->decodeNullable($exthData['description'], $encoding),
+            language: $this->decodeNullable($exthData['language'], $encoding),
+            subjects: \array_map(fn (string $value): string => $this->decodeText($value, $encoding), $exthData['subjects']),
+            license: $this->decodeNullable($exthData['license'], $encoding),
+            publishDate: $publishDate
                 ? new PublishDate((int) $publishDate->format('Y'), (int) $publishDate->format('m'), (int) $publishDate->format('d'))
                 : new PublishDate(),
         );
     }
 
     /**
-     * @return array{author: string|null, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null}
+     * @return array{authors: string[], subjects: string[], publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -412,7 +479,8 @@ final class MobiDriver extends AbstractDriver
         $records = $this->readInt($f, 4);
 
         $meta = [
-            'author' => null,
+            'authors' => [],
+            'subjects' => [],
             'publisher' => null,
             'description' => null,
             'isbn' => null,
@@ -432,10 +500,13 @@ final class MobiDriver extends AbstractDriver
             // https://wiki.mobileread.com/wiki/MOBI#EXTH_Header
             switch ($type) {
                 case 100:
-                    $meta['author'] = $data;
+                    $meta['authors'][] = $data;
                     break;
                 case 101:
                     $meta['publisher'] = $data;
+                    break;
+                case 105:
+                    $meta['subjects'][] = $data;
                     break;
                 case 103:
                     $meta['description'] = $data;
@@ -516,7 +587,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * @see https://wiki.mobileread.com/wiki/MOBI#PalmDOC_Header
      *
-     * @return array{compression: int, record_count: int, text_length: int}
+     * @return array{compression: int, record_count: int, text_length: int, encryption: int}
      */
     protected function parsePalmDoc(\SplFileObject $f): array
     {
@@ -525,19 +596,28 @@ final class MobiDriver extends AbstractDriver
         $textLength = $this->readInt($f, 4);
         $recordCount = $this->readInt($f, 2);
         $recordSize = $this->readInt($f, 2);
-        $f->fseek(4, \SEEK_CUR);
+        $encryption = $this->readInt($f, 2); // 0 == none, 1 = old Mobipocket, 2 = Mobipocket
+        $f->fseek(2, \SEEK_CUR);
 
         return [
             'compression' => $compression,
             'record_count' => $recordCount,
             'text_length' => $textLength,
+            'encryption' => $encryption,
         ];
+    }
+
+    private function assertNotEncrypted(int $encryption): void
+    {
+        if (0 !== $encryption) {
+            throw new EncryptedBookException(\sprintf('Encrypted MOBI (encryption type %d) is not supported', $encryption));
+        }
     }
 
     /**
      * @see https://wiki.mobileread.com/wiki/MOBI#MOBI_Header
      *
-     * @return array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int}
+     * @return array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int}
      */
     protected function parseMobiHeader(\SplFileObject $f): array
     {
@@ -641,6 +721,7 @@ final class MobiDriver extends AbstractDriver
             'huffman_record_count' => $huffmanRecordCount,
             'first_non_book_index' => $firstNonBookIndex,
             'first_image_index' => $firstImageIndex,
+            'ncx_index' => $INDXRecordOffset,
         ];
     }
 }

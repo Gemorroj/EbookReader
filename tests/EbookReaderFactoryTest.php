@@ -17,33 +17,33 @@ final class EbookReaderFactoryTest extends TestCase
 {
     public function testCreateFb2(): void
     {
-        $fb2 = EbookReaderFactory::create(__DIR__.'/fixtures/fb2/fb2.fb2');
+        $fb2 = EbookReaderFactory::create(__DIR__.'/fixtures/fb2/fb2-cyrillic.fb2');
         self::assertInstanceOf(Fb2Driver::class, $fb2);
     }
 
     public function testCreateFb2Zip(): void
     {
-        $fb2 = EbookReaderFactory::create(__DIR__.'/fixtures/fb2/fb2.zip');
+        $fb2 = EbookReaderFactory::create(__DIR__.'/fixtures/fb2/fb2-epigraph.zip');
         self::assertInstanceOf(Fb2Driver::class, $fb2);
     }
 
     public function testCreateEpub3(): void
     {
-        $epub3opf2 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3-opf2.epub');
-        self::assertInstanceOf(Epub3Driver::class, $epub3opf2);
-        $epub3opf3 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3-opf3.epub');
-        self::assertInstanceOf(Epub3Driver::class, $epub3opf3);
+        $epub3 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub3-nav.epub');
+        self::assertInstanceOf(Epub3Driver::class, $epub3);
+        $epub2 = EbookReaderFactory::create(__DIR__.'/fixtures/epub/epub2-ncx-cyrillic.epub');
+        self::assertInstanceOf(Epub3Driver::class, $epub2);
     }
 
     public function testCreateMobi(): void
     {
-        $mobi = EbookReaderFactory::create(__DIR__.'/fixtures/mobi/mobi.mobi');
+        $mobi = EbookReaderFactory::create(__DIR__.'/fixtures/mobi/palmodoc-cyrillic.mobi');
         self::assertInstanceOf(MobiDriver::class, $mobi);
     }
 
     public function testCreateTxt(): void
     {
-        $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/Sukonkin_Pleyada.txt');
+        $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/txt-utf8.txt');
         self::assertInstanceOf(TxtDriver::class, $txt);
     }
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EbookReader;
+namespace EbookReader\Data;
 
 use EbookReader\Resource\Resource;
 use EbookReader\Resource\Style;

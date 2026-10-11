@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace EbookReader\Meta;
 
-use EbookReader\EbookMetaInterface;
-
 final readonly class TxtMeta implements EbookMetaInterface
 {
+    /**
+     * @param string[] $authors
+     * @param string[] $subjects
+     */
     public function __construct(
         private string $title,
-        private ?string $author = null,
+        private array $authors = [],
         private ?string $publisher = null,
         private ?string $isbn = null,
         private ?string $description = null,
         private ?string $language = null,
+        private array $subjects = [],
         private ?string $license = null,
         private PublishDate $publishDate = new PublishDate(),
     ) {
@@ -25,9 +28,25 @@ final readonly class TxtMeta implements EbookMetaInterface
         return $this->title;
     }
 
+    /**
+     * @return string[]
+     */
+    public function getAuthors(): array
+    {
+        return $this->authors;
+    }
+
     public function getAuthor(): ?string
     {
-        return $this->author;
+        return $this->authors ? \implode(', ', $this->authors) : null;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getSubjects(): array
+    {
+        return $this->subjects;
     }
 
     public function getPublisher(): ?string

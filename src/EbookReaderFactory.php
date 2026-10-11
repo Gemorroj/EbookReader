@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader;
 
+use EbookReader\Driver\EbookDriverInterface;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Driver\MobiDriver;

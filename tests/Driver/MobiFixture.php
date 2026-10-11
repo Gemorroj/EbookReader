@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Tests\Support;
+namespace EbookReader\Tests\Driver;
 
 /**
  * Builds a minimal but spec-conformant MOBI (Palm Database) in memory.

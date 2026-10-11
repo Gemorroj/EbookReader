@@ -6,12 +6,12 @@
 
 
 ### Formats:
-| Format | Versions | Cover | Inline images | Content |
-| --- | --- | --- | --- | --- |
-| EPUB | 2 and 3 | yes | yes | HTML fragments + styles |
-| MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | yes | HTML |
-| FB2 | 2.x, plain or ZIP | yes | yes | HTML fragments |
-| TXT | plain or ZIP | ZIP only | no | plain text |
+| Format | Versions | Cover | Inline images | Table of contents | Content |
+| --- | --- | --- | --- | --- | --- |
+| EPUB | 2 and 3 | yes | yes | yes | HTML fragments + styles |
+| MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | yes | yes | HTML |
+| FB2 | 2.x, plain or ZIP | yes | yes | yes | HTML fragments |
+| TXT | plain or ZIP | ZIP only | no | no | plain text |
 
 Format detection is automatic (`EbookReaderFactory::create()`).
 
@@ -38,13 +38,15 @@ use EbookReader\Driver\Epub3Driver;
 
 $ebookReader = EbookReaderFactory::create('file.epub');
 
-$meta = $ebookReader->getMeta();          // EbookMetaInterface
+echo $ebookReader->getFormat()->value;    // "epub"
+
+$meta = $ebookReader->getMeta();          // EbookReader\Meta\EbookMetaInterface
 echo $meta->getTitle();
 echo $meta->getAuthor();
 $publishDate = $meta->getPublishDate();   // EbookReader\Meta\PublishDate
 var_dump($publishDate->getYear(), $publishDate->getMonth(), $publishDate->getDay());
 
-$data = $ebookReader->getData();          // EbookDataInterface[]
+$data = $ebookReader->getData();          // EbookReader\Data\EbookDataInterface[]
 foreach ($data as $section) {
     echo $section->getTitle();
     echo $section->getText();             // markup as-is (usually HTML)
@@ -58,6 +60,12 @@ foreach ($data as $section) {
 $cover = $ebookReader->getCover();        // ?EbookReader\Cover\Cover
 if ($cover) {
     file_put_contents('cover', $cover->getData());
+}
+
+$tableOfContents = $ebookReader->getTableOfContents(); // EbookReader\TableOfContents\TableOfContents[]
+foreach ($tableOfContents as $nav) {
+    echo str_repeat('  ', $nav->getLevel() - 1).$nav->getTitle();
+    // $nav->getSectionIndex() -> index into $data; $nav->getPosition() -> offset (MOBI)
 }
 
 $ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException

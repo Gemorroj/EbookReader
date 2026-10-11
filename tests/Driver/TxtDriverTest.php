@@ -7,11 +7,17 @@ namespace EbookReader\Tests\Driver;
 use EbookReader\Data\TxtData;
 use EbookReader\Driver\TxtDriver;
 use EbookReader\Exception\ParserException;
+use EbookReader\Format;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class TxtDriverTest extends TestCase
 {
+    public function testGetFormat(): void
+    {
+        self::assertSame(Format::TXT, new TxtDriver('file.txt')->getFormat());
+    }
+
     #[DataProvider('filesProvider')]
     public function testIsValid(string $file, mixed ...$args): void
     {
@@ -53,9 +59,15 @@ final class TxtDriverTest extends TestCase
         $driver->getMeta();
     }
 
+    public function testTableOfContentsIsEmpty(): void
+    {
+        self::assertSame([], new TxtDriver(__DIR__.'/../fixtures/txt/txt-utf8.txt')->getTableOfContents());
+    }
+
     public function testSingleLineWithoutTitle(): void
     {
-        $driver = new TxtDriver(__DIR__.'/../fixtures/txt/single-line.txt');
+        $driver = new TxtDriver(__DIR__.'/../fixtures/txt/txt-single-line.txt');
+        self::assertTrue($driver->isValid());
 
         $data = $driver->getData();
         self::assertCount(1, $data);
@@ -117,11 +129,11 @@ final class TxtDriverTest extends TestCase
     public static function filesCoverProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt',
+            __DIR__.'/../fixtures/txt/txt-utf8.txt',
             null,
         ];
         yield [
-            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt.zip',
+            __DIR__.'/../fixtures/txt/txt-cover.zip',
             'image/jpeg',
         ];
     }
@@ -129,46 +141,30 @@ final class TxtDriverTest extends TestCase
     public static function filesDataProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt',
+            __DIR__.'/../fixtures/txt/txt-utf8.txt',
             1,
-            'Алексей Суконкин',
-            "Алексей Суконкин\n".
-            "   \u{a0}\n".
-            "   ПЛЕЯДА\n".
-            "\n".
-            "   \u{a0}\n".
-            "   Все события в книге вымышлены,\n".
-            '   а совпадения совершенно случайны.',
-            "   Даже такой страшной ценой, как собственная жизнь.\n".
-            "   \u{a0}\n".
-            '   2024-2025г.г.',
+            'Тестовая книга',
+            "Тестовая книга\n==============",
+            'Последняя строка без перевода строки.',
         ];
         yield [
-            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt.zip',
+            __DIR__.'/../fixtures/txt/txt-cover.zip',
             1,
-            'Алексей Суконкин',
-            "Алексей Суконкин\n".
-            "   \u{a0}\n".
-            "   ПЛЕЯДА\n".
-            "\n".
-            "   \u{a0}\n".
-            "   Все события в книге вымышлены,\n".
-            '   а совпадения совершенно случайны.',
-            "   Даже такой страшной ценой, как собственная жизнь.\n".
-            "   \u{a0}\n".
-            '   2024-2025г.г.',
+            'Тестовая книга',
+            "Тестовая книга\n==============",
+            'Последняя строка без перевода строки.',
         ];
     }
 
     public static function filesProvider(): \Generator
     {
         yield [
-            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt',
-            'Алексей Суконкин', // title
+            __DIR__.'/../fixtures/txt/txt-utf8.txt',
+            'Тестовая книга', // title
         ];
         yield [
-            __DIR__.'/../fixtures/txt/Sukonkin_Pleyada.txt.zip',
-            'Алексей Суконкин', // title
+            __DIR__.'/../fixtures/txt/txt-cover.zip',
+            'Тестовая книга', // title
         ];
     }
 }

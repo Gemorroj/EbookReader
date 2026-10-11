@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Tests\Support;
+namespace EbookReader\Tests\Decompressor;
+
+use EbookReader\Tests\Driver\MobiFixture;
 
 /**
  * Builds a minimal but spec-conformant HUFF/CDIC MOBI for tests.
