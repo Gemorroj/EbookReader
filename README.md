@@ -6,10 +6,14 @@
 
 
 ### Formats:
-- EPUB
-- MOBI
-- FB2, FB2-ZIP
-- TXT, TXT-ZIP
+| Format | Versions | Cover | Content |
+| --- | --- | --- | --- |
+| EPUB | 2 and 3 | yes | HTML fragments + styles |
+| MOBI | uncompressed, PalmDOC, HUFF/CDIC | no | HTML |
+| FB2 | 2.x, plain or ZIP | yes | HTML fragments |
+| TXT | plain or ZIP | ZIP only | plain text |
+
+Format detection is automatic (`EbookReaderFactory::create()`).
 
 
 ### Requirements:
@@ -17,6 +21,7 @@
 - ext-zip
 - ext-dom
 - ext-xmlreader
+- ext-libxml
 - ext-mbstring
 
 
@@ -32,15 +37,29 @@ use EbookReader\EbookReaderFactory;
 use EbookReader\Driver\Epub3Driver;
 
 $ebookReader = EbookReaderFactory::create('file.epub');
-$meta = $ebookReader->getMeta();
-print_r($meta); // EbookMetaInterface object
-$data = $ebookReader->getData();
-print_r($data); // EbookDataInterface object
-$cover = $ebookReader->getCover();
-print_r($cover); // EbookCoverInterface object
 
-$ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException exception
+$meta = $ebookReader->getMeta();          // EbookMetaInterface
+echo $meta->getTitle();
+echo $meta->getAuthor();
+$publishDate = $meta->getPublishDate();   // EbookReader\Meta\PublishDate
+var_dump($publishDate->getYear(), $publishDate->getMonth(), $publishDate->getDay());
+
+$data = $ebookReader->getData();          // EbookDataInterface[]
+foreach ($data as $section) {
+    echo $section->getTitle();
+    echo $section->getText();             // markup as-is (usually HTML)
+}
+
+$cover = $ebookReader->getCover();        // ?EbookCoverInterface
+if ($cover) {
+    file_put_contents('cover', $cover->getData());
+}
+
+$ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException
 
 $driver = new Epub3Driver('fake.file');
-var_dump($driver->isValid()); // false
+var_dump($driver->isValid());             // false
 ```
+
+### Limitations:
+- DRM-protected books are not supported.

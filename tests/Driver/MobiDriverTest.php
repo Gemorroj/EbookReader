@@ -7,6 +7,8 @@ namespace EbookReader\Tests\Driver;
 use EbookReader\Data\MobiData;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Exception\ParserException;
+use EbookReader\Tests\Support\HuffCdicFixture;
+use EbookReader\Tests\Support\MobiFixture;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -63,6 +65,96 @@ final class MobiDriverTest extends TestCase
         $driver = new MobiDriver($file);
         $this->expectException(ParserException::class);
         $driver->getMeta();
+    }
+
+    public function testWindows1252Encoding(): void
+    {
+        $title = "Caf\xE9";        // "Café" in CP1252
+        $text = "R\xE9sum\xE9";    // "Résumé" in CP1252
+
+        $result = $this->withMobi(
+            MobiFixture::build($title, 1, 1252, \strlen($text), 1, [$text]),
+            static function (MobiDriver $driver): array {
+                return [$driver->getData()[0]->getText(), $driver->getMeta()->getTitle()];
+            }
+        );
+
+        self::assertSame(["R\xC3\xA9sum\xC3\xA9", "Caf\xC3\xA9"], $result);
+    }
+
+    public function testTextLengthTruncation(): void
+    {
+        $text = $this->withMobi(
+            MobiFixture::build('Title', 1, 65001, 5, 1, ['HELLOGARBAGE']),
+            static fn (MobiDriver $driver): string => $driver->getData()[0]->getText()
+        );
+
+        self::assertSame('HELLO', $text);
+    }
+
+    public function testUnsupportedCompression(): void
+    {
+        $this->expectException(ParserException::class);
+
+        $this->withMobi(
+            MobiFixture::build('Title', 99, 65001, 1, 1, ['x']),
+            static fn (MobiDriver $driver): array => $driver->getData()
+        );
+    }
+
+    /**
+     * Real HUFF/CDIC sample from libmobi (tests/samples/sample-unicode-huffdic.mobi);
+     * a generated test document, not a book. Its decompressed text is byte-identical
+     * to the uncompressed sibling sample.
+     */
+    public function testRealHuffCdicFile(): void
+    {
+        $driver = new MobiDriver(__DIR__.'/../fixtures/mobi/huffcdic.mobi');
+        self::assertTrue($driver->isValid());
+        self::assertSame('Libmobi', $driver->getMeta()->getTitle());
+
+        $text = $driver->getData()[0]->getText();
+        self::assertSame(111701, \strlen($text));
+        self::assertStringContainsString('This is a sample for testing libmobi project.', $text);
+    }
+
+    public function testHuffCdic(): void
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'mobi');
+        self::assertNotFalse($file);
+        \file_put_contents($file, HuffCdicFixture::buildMobi());
+
+        try {
+            $driver = new MobiDriver($file);
+            self::assertTrue($driver->isValid());
+            self::assertSame(HuffCdicFixture::TITLE, $driver->getMeta()->getTitle());
+
+            $data = $driver->getData();
+            self::assertCount(1, $data);
+            self::assertSame(HuffCdicFixture::TEXT, $data[0]->getText());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param callable(MobiDriver): T $callback
+     *
+     * @return T
+     */
+    private function withMobi(string $bytes, callable $callback): mixed
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'mobi');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $bytes);
+
+        try {
+            return $callback(new MobiDriver($file));
+        } finally {
+            \unlink($file);
+        }
     }
 
     /**

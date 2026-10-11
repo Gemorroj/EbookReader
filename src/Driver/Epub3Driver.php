@@ -44,6 +44,31 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
+     * Resolves a manifest href (URL-encoded and possibly relative) to a ZIP entry name.
+     */
+    private function resolveZipPath(string $href): string
+    {
+        $path = \rawurldecode($href);
+        if (null !== $this->packageDirectory && '.' !== $this->packageDirectory) {
+            $path = $this->packageDirectory.'/'.$path;
+        }
+
+        $parts = [];
+        foreach (\explode('/', $path) as $part) {
+            if ('' === $part || '.' === $part) {
+                continue;
+            }
+            if ('..' === $part) {
+                \array_pop($parts);
+                continue;
+            }
+            $parts[] = $part;
+        }
+
+        return \implode('/', $parts);
+    }
+
+    /**
      * Should unzip the EPUB file for references.
      *
      * @return Epub3Data[]
@@ -97,8 +122,7 @@ final class Epub3Driver extends AbstractDriver
                     }
                 }
 
-                $file = $itemNode->getAttribute('href');
-                $zipFilePath = '.' === $this->packageDirectory ? $file : $this->packageDirectory.'/'.$file;
+                $zipFilePath = $this->resolveZipPath($itemNode->getAttribute('href'));
 
                 $content = $zip->getFromName($zipFilePath);
                 if (false === $content) {
@@ -207,8 +231,7 @@ final class Epub3Driver extends AbstractDriver
         }
 
         $mime = $potentialCoverNode->getAttribute('media-type');
-        $file = $potentialCoverNode->getAttribute('href');
-        $zipFilePath = '.' === $this->packageDirectory ? $file : $this->packageDirectory.'/'.$file;
+        $zipFilePath = $this->resolveZipPath($potentialCoverNode->getAttribute('href'));
 
         $zip = new \ZipArchive();
         $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);

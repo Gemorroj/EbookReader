@@ -66,6 +66,10 @@ final class PalmDocLz77 implements DecompressorInterface
         $lzLength = ($next & 0x7) + 3;
 
         $bufferSize = \count($this->buffer);
+        if ($distance <= 0 || $distance > $bufferSize) {
+            return;
+        }
+
         for ($i = 0; $i < $lzLength; ++$i) {
             $this->buffer[] = $this->buffer[$bufferSize - $distance + $i];
         }

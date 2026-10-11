@@ -175,6 +175,20 @@ final class Epub3DriverTest extends TestCase
         self::assertNull($driver->getCover());
     }
 
+    public function testEncodedAndRelativeHref(): void
+    {
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/encoded-href.epub');
+        self::assertTrue($driver->isValid());
+
+        $data = $driver->getData();
+        self::assertCount(1, $data);
+        self::assertStringContainsString('Chapter body', $data[0]->getText());
+
+        $cover = $driver->getCover();
+        self::assertNotNull($cover);
+        self::assertSame('image/jpeg', $cover->getMime());
+    }
+
     public static function filesProviderFake(): \Generator
     {
         yield [__DIR__.'/../fixtures/fake.xml'];
