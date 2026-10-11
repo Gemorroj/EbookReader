@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 final class Fb2DriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
-    public function testIsValid(string $file, ...$args): void
+    public function testIsValid(string $file, mixed ...$args): void
     {
         $driver = new Fb2Driver($file);
         $result = $driver->isValid();
@@ -53,9 +53,10 @@ final class Fb2DriverTest extends TestCase
         self::assertSame($expectedDescription, $meta->getDescription());
         self::assertSame($expectedLanguage, $meta->getLanguage());
         self::assertSame($expectedLicense, $meta->getLicense());
-        self::assertSame($expectedPublishYear, $meta->getPublishYear());
-        self::assertSame($expectedPublishMonth, $meta->getPublishMonth());
-        self::assertSame($expectedPublishDay, $meta->getPublishDay());
+        $publishDate = $meta->getPublishDate();
+        self::assertSame($expectedPublishYear, $publishDate->getYear());
+        self::assertSame($expectedPublishMonth, $publishDate->getMonth());
+        self::assertSame($expectedPublishDay, $publishDate->getDay());
     }
 
     #[DataProvider('filesProviderFake')]
@@ -64,6 +65,25 @@ final class Fb2DriverTest extends TestCase
         $driver = new Fb2Driver($file);
         $this->expectException(ParserException::class);
         $driver->getMeta();
+    }
+
+    public function testGetMetaEdgeCases(): void
+    {
+        $driver = new Fb2Driver(__DIR__.'/../fixtures/fb2/edge-cases.fb2');
+        self::assertTrue($driver->isValid());
+
+        $meta = $driver->getMeta();
+        self::assertSame('Edge Cases', $meta->getTitle());
+        self::assertNull($meta->getAuthor());
+        self::assertNull($meta->getPublisher());
+        self::assertNull($meta->getIsbn());
+        self::assertTrue($meta->getPublishDate()->isEmpty());
+    }
+
+    public function testGetCoverEdgeCases(): void
+    {
+        $driver = new Fb2Driver(__DIR__.'/../fixtures/fb2/edge-cases.fb2');
+        self::assertNull($driver->getCover());
     }
 
     public static function filesProviderFake(): \Generator

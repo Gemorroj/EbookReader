@@ -7,7 +7,9 @@ namespace EbookReader\Tests;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Driver\MobiDriver;
+use EbookReader\Driver\TxtDriver;
 use EbookReader\EbookReaderFactory;
+use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 use PHPUnit\Framework\TestCase;
 
@@ -39,9 +41,21 @@ final class EbookReaderFactoryTest extends TestCase
         self::assertInstanceOf(MobiDriver::class, $mobi);
     }
 
+    public function testCreateTxt(): void
+    {
+        $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/Sukonkin_Pleyada.txt');
+        self::assertInstanceOf(TxtDriver::class, $txt);
+    }
+
     public function testCreateFake(): void
     {
         $this->expectException(UnsupportedFormatException::class);
         EbookReaderFactory::create(__DIR__.'/fixtures/fake.zip');
+    }
+
+    public function testCreateNotReadable(): void
+    {
+        $this->expectException(FileNotReadableException::class);
+        EbookReaderFactory::create(__DIR__.'/fixtures/does-not-exist.epub');
     }
 }

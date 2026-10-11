@@ -10,6 +10,7 @@ use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\Fb2Meta;
+use EbookReader\Meta\PublishDate;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 
@@ -38,44 +39,50 @@ final class Fb2Driver extends AbstractDriver
      */
     public function getData(): array
     {
-        $data = [];
         $stylesheetNode = $this->getFictionBookStylesheet();
-        $bodyNode = $this->getFictionBookBody();
 
         $styles = [];
         if ($stylesheetNode) {
             $styles[] = new Style($stylesheetNode->nodeValue, StyleType::CSS);
         }
 
-        /** @var \DOMElement $sectionNode */
-        foreach ($bodyNode->getElementsByTagName('section') as $sectionNode) {
-            $title = $sectionNode->getElementsByTagName('title')->item(0)?->textContent;
-            $text = $this->makeText($sectionNode);
-
-            $annotation = null;
-            /** @var \DOMElement|null $annotationNode */
-            $annotationNode = $sectionNode->getElementsByTagName('annotation')->item(0);
-            if ($annotationNode) {
-                $annotation = $this->makeText($annotationNode);
-            }
-
-            $epigraphs = [];
-            /** @var \DOMElement $epigraphNode */
-            foreach ($sectionNode->getElementsByTagName('epigraph') as $epigraphNode) {
-                $epigraphText = $this->makeText($epigraphNode);
-                if ($epigraphText) {
-                    $authors = [];
-                    foreach ($epigraphNode->getElementsByTagName('text-author') as $textAuthorNode) {
-                        $authors[] = $this->makeAuthorText($textAuthorNode);
-                    }
-                    $epigraphs[] = new Fb2DataEpigraph($epigraphText, $authors);
-                }
-            }
-
-            $data[] = new Fb2Data($text, $title, $annotation, $epigraphs, $styles);
+        $data = [];
+        foreach ($this->getFictionBookSections() as $sectionNode) {
+            $data[] = $this->makeSectionData($sectionNode, $styles);
         }
 
         return $data;
+    }
+
+    /**
+     * @param Style[] $styles
+     */
+    private function makeSectionData(\DOMElement $sectionNode, array $styles): Fb2Data
+    {
+        $title = $sectionNode->getElementsByTagName('title')->item(0)?->textContent;
+        $text = $this->makeText($sectionNode);
+
+        $annotation = null;
+        /** @var \DOMElement|null $annotationNode */
+        $annotationNode = $sectionNode->getElementsByTagName('annotation')->item(0);
+        if ($annotationNode) {
+            $annotation = $this->makeText($annotationNode);
+        }
+
+        $epigraphs = [];
+        /** @var \DOMElement $epigraphNode */
+        foreach ($sectionNode->getElementsByTagName('epigraph') as $epigraphNode) {
+            $epigraphText = $this->makeText($epigraphNode);
+            if ($epigraphText) {
+                $authors = [];
+                foreach ($epigraphNode->getElementsByTagName('text-author') as $textAuthorNode) {
+                    $authors[] = $this->makeAuthorText($textAuthorNode);
+                }
+                $epigraphs[] = new Fb2DataEpigraph($epigraphText, $authors);
+            }
+        }
+
+        return new Fb2Data($text, $title, $annotation, $epigraphs, $styles);
     }
 
     private function makeText(\DOMElement $node, bool $rowFrame = false): string
@@ -141,14 +148,25 @@ final class Fb2Driver extends AbstractDriver
         /** @var \DOMElement|null $coverpageNode */
         $coverpageNode = $titleInfoNode->getElementsByTagName('coverpage')->item(0);
         if ($coverpageNode) {
-            /** @var \DOMElement $imageNode */
+            /** @var \DOMElement|null $imageNode */
             $imageNode = $coverpageNode->getElementsByTagName('image')->item(0);
-            $link = \ltrim($imageNode->attributes->getNamedItem('href')->nodeValue, '#');
-            $node = $this->getFictionBookBinaryById($link);
+            $href = $imageNode?->attributes?->getNamedItem('href')?->nodeValue;
+            if (null !== $href) {
+                $link = \ltrim($href, '#');
+                if ('' !== $link) {
+                    $node = $this->getFictionBookBinaryById($link);
 
-            $data = \base64_decode($node->textContent);
+                    $data = \base64_decode($node->textContent, true);
+                    if (false !== $data) {
+                        $mime = $node->getAttribute('content-type');
+                        if ('' === $mime) {
+                            $mime = $this->getImageMimeDetector()->detect($data) ?? '';
+                        }
 
-            return new Cover($data, $node->getAttribute('content-type'));
+                        return new Cover($data, $mime);
+                    }
+                }
+            }
         }
 
         return null;
@@ -180,14 +198,16 @@ final class Fb2Driver extends AbstractDriver
             $description,
             $language,
             null,
-            $publishYear,
-            null,
-            null,
+            new PublishDate($publishYear),
         );
     }
 
-    protected function makePublishYear(\DOMElement $publishNodeInfo): ?int
+    protected function makePublishYear(?\DOMElement $publishNodeInfo): ?int
     {
+        if (null === $publishNodeInfo) {
+            return null;
+        }
+
         /*
           <xs:element name="year" type="xs:gYear" minOccurs="0">
            <xs:annotation>
@@ -330,17 +350,17 @@ final class Fb2Driver extends AbstractDriver
         $authors = [];
         /** @var \DOMElement $authorNode */
         foreach ($authorNodeList as $authorNode) {
-            $firstNameNode = $authorNode->getElementsByTagName('first-name');
-            $middleNameNode = $authorNode->getElementsByTagName('middle-name');
-            $lastNameNode = $authorNode->getElementsByTagName('last-name');
-            $nicknameNode = $authorNode->getElementsByTagName('nickname');
+            $firstName = $authorNode->getElementsByTagName('first-name')->item(0)?->nodeValue;
+            $middleName = $authorNode->getElementsByTagName('middle-name')->item(0)?->nodeValue;
+            $lastName = $authorNode->getElementsByTagName('last-name')->item(0)?->nodeValue;
+            $nickname = $authorNode->getElementsByTagName('nickname')->item(0)?->nodeValue;
 
-            if ($firstNameNode->length && $middleNameNode->length && $lastNameNode->length) {
-                $authors[] = $firstNameNode->item(0)->nodeValue.' '.$middleNameNode->item(0)->nodeValue.' '.$lastNameNode->item(0)->nodeValue;
-            } elseif ($firstNameNode->length && $lastNameNode->length) {
-                $authors[] = $firstNameNode->item(0)->nodeValue.' '.$lastNameNode->item(0)->nodeValue;
-            } else {
-                $authors[] = $nicknameNode->item(0)->nodeValue;
+            if ($firstName && $middleName && $lastName) {
+                $authors[] = $firstName.' '.$middleName.' '.$lastName;
+            } elseif ($firstName && $lastName) {
+                $authors[] = $firstName.' '.$lastName;
+            } elseif ($nickname) {
+                $authors[] = $nickname;
             }
         }
 
@@ -376,7 +396,7 @@ final class Fb2Driver extends AbstractDriver
         $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
         if (!$reader) {
             throw new ParserException();
         }
@@ -403,7 +423,7 @@ final class Fb2Driver extends AbstractDriver
         $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
         if (!$reader) {
             throw new ParserException();
         }
@@ -426,31 +446,46 @@ final class Fb2Driver extends AbstractDriver
         return null;
     }
 
-    protected function getFictionBookBody(): \DOMElement
+    /**
+     * Streams <section> elements of the first <body> without expanding the whole body into memory.
+     *
+     * @return \Generator<\DOMElement>
+     */
+    protected function getFictionBookSections(): \Generator
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
         if (!$reader) {
             throw new ParserException();
         }
 
-        while ($reader->read()) {
-            if (\XMLReader::ELEMENT === $reader->nodeType && 'body' === $reader->name) { // first body element
-                /** @var \DOMElement|false $bodyNode */
-                $bodyNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
-                $reader->close();
-                if (!$bodyNode) {
-                    throw new ParserException();
+        try {
+            $inBody = false;
+            while ($reader->read()) {
+                if (\XMLReader::ELEMENT === $reader->nodeType) {
+                    if ('body' === $reader->name) {
+                        $inBody = true;
+                        continue;
+                    }
+
+                    if ($inBody && 'section' === $reader->name) {
+                        /** @var \DOMElement|false $sectionNode */
+                        $sectionNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
+                        if (!$sectionNode) {
+                            throw new ParserException();
+                        }
+
+                        yield $sectionNode;
+                    }
+                } elseif ($inBody && \XMLReader::END_ELEMENT === $reader->nodeType && 'body' === $reader->name) {
+                    break;
                 }
-
-                return $bodyNode;
             }
+        } finally {
+            $reader->close();
         }
-
-        $reader->close();
-        throw new ParserException();
     }
 
     protected function getFictionBookBinaryById(string $id): \DOMElement
@@ -458,7 +493,7 @@ final class Fb2Driver extends AbstractDriver
         $file = $this->internalFile ?? $this->makeInternalFile();
 
         /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NOENT | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
         if (!$reader) {
             throw new ParserException();
         }

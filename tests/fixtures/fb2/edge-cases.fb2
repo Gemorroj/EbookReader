@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <description>
+        <title-info>
+            <genre>sf</genre>
+            <author>
+                <first-name>Ivan</first-name>
+            </author>
+            <book-title>Edge Cases</book-title>
+            <coverpage>
+                <image/>
+            </coverpage>
+            <lang>ru</lang>
+        </title-info>
+        <document-info>
+            <author>
+                <nickname>anon</nickname>
+            </author>
+            <program-used>test</program-used>
+            <date>2020</date>
+        </document-info>
+    </description>
+    <body>
+        <section>
+            <title><p>Chapter</p></title>
+            <p>Hello world</p>
+        </section>
+    </body>
+</FictionBook>

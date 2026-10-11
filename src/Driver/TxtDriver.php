@@ -72,7 +72,7 @@ final class TxtDriver extends AbstractDriver
             if ($this->isBinary($line1.$line2.$line3)) {
                 $result = false;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return false;
         } finally {
             unset($f); // close file

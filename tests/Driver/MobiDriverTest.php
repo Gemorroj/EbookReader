@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 final class MobiDriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
-    public function testIsValid(string $file, ...$args): void
+    public function testIsValid(string $file, mixed ...$args): void
     {
         $driver = new MobiDriver($file);
         $result = $driver->isValid();
@@ -51,9 +51,10 @@ final class MobiDriverTest extends TestCase
         self::assertSame($expectedDescription, $meta->getDescription());
         self::assertSame($expectedLanguage, $meta->getLanguage());
         self::assertSame($expectedLicense, $meta->getLicense());
-        self::assertSame($expectedPublishYear, $meta->getPublishYear());
-        self::assertSame($expectedPublishMonth, $meta->getPublishMonth());
-        self::assertSame($expectedPublishDay, $meta->getPublishDay());
+        $publishDate = $meta->getPublishDate();
+        self::assertSame($expectedPublishYear, $publishDate->getYear());
+        self::assertSame($expectedPublishMonth, $publishDate->getMonth());
+        self::assertSame($expectedPublishDay, $publishDate->getDay());
     }
 
     #[DataProvider('filesProviderFake')]
@@ -64,6 +65,10 @@ final class MobiDriverTest extends TestCase
         $driver->getMeta();
     }
 
+    /**
+     * @param non-empty-string $expectedStartText
+     * @param non-empty-string $expectedEndText
+     */
     #[DataProvider('filesDataProvider')]
     public function testGetData(
         string $file,

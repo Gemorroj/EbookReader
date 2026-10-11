@@ -16,9 +16,7 @@ final readonly class MobiMeta implements EbookMetaInterface
         private ?string $description,
         private ?string $language,
         private ?string $license,
-        private ?int $publishYear,
-        private ?int $publishMonth,
-        private ?int $publishDay
+        private PublishDate $publishDate
     ) {
     }
 
@@ -57,18 +55,8 @@ final readonly class MobiMeta implements EbookMetaInterface
         return $this->license;
     }
 
-    public function getPublishYear(): ?int
+    public function getPublishDate(): PublishDate
     {
-        return $this->publishYear;
-    }
-
-    public function getPublishMonth(): ?int
-    {
-        return $this->publishMonth;
-    }
-
-    public function getPublishDay(): ?int
-    {
-        return $this->publishDay;
+        return $this->publishDate;
     }
 }

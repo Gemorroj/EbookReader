@@ -36,7 +36,7 @@ final class ImageMimeDetector implements ImageMimeDetectorInterface
 
     private function isGif(string $data): bool
     {
-        return \str_starts_with($data, 'GI');
+        return \str_starts_with($data, 'GIF87a') || \str_starts_with($data, 'GIF89a');
     }
 
     private function isSvg(string $data): bool

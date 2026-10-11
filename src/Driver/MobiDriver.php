@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Data\MobiData;
-use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\PalmDocLz77;
 use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\MobiMeta;
+use EbookReader\Meta\PublishDate;
 
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI
@@ -22,11 +22,11 @@ final class MobiDriver extends AbstractDriver
     {
         try {
             $f = new \SplFileObject($this->getFile(), 'r');
-            $palmDbData = $this->parsePalmDb($f);
-            $palmDocData = $this->parsePalmDoc($f);
-            $mobiData = $this->parseMobiHeader($f);
-            $exthData = $this->parseExth($f);
-        } catch (\Exception $e) {
+            $this->parsePalmDb($f);
+            $this->parsePalmDoc($f);
+            $this->parseMobiHeader($f);
+            $this->parseExth($f);
+        } catch (\Throwable $e) {
             return false;
         } finally {
             unset($f); // close file
@@ -50,19 +50,22 @@ final class MobiDriver extends AbstractDriver
             $palmDbData = $this->parsePalmDb($f);
             $palmDocData = $this->parsePalmDoc($f);
             $mobiData = $this->parseMobiHeader($f);
-            $exthData = $this->parseExth($f);
+            $this->parseExth($f);
 
-            /* @var DecompressorInterface|null $decompressor */
             if (2 === $palmDocData['compression']) {
                 $decompressor = new PalmDocLz77();
             } elseif (17480 === $palmDocData['compression']) {
-                throw new \RuntimeException('HUFF/CDIC compression is not supported.');
+                throw new ParserException('HUFF/CDIC compression is not supported.');
             } else {
                 $decompressor = null;
             }
 
+            if (!isset($palmDbData['records'][0])) {
+                throw new ParserException();
+            }
+
             $f->fseek($palmDbData['records'][0]['data_offset'] + $mobiData['full_name_offset']);
-            $title = $f->fread($mobiData['full_name_length']);
+            $title = $this->readBytes($f, $mobiData['full_name_length']);
 
             $text = '';
             for ($i = 1; $i <= $palmDocData['record_count']; ++$i) {
@@ -70,16 +73,20 @@ final class MobiDriver extends AbstractDriver
                 $begin = $palmDbData['records'][$i]['data_offset'] ?? null;
                 $end = $palmDbData['records'][$i + 1]['data_offset'] ?? null;
 
-                if (!$begin || !$end) {
+                if (null === $begin || null === $end) {
                     continue;
                 }
 
                 $f->fseek($begin);
-                $preData = \array_values(\unpack('C*', $f->fread($end - $begin)));
+                $unpacked = \unpack('C*', $this->readBytes($f, $end - $begin));
+                if (false === $unpacked) {
+                    throw new ParserException();
+                }
+                $preData = \array_values($unpacked);
 
                 $extraSize = $this->getRecordExtraSize($preData, $flags);
                 $f->fseek($begin);
-                $data = $f->fread($end - $begin - $extraSize);
+                $data = $this->readBytes($f, $end - $begin - $extraSize);
                 $text .= $decompressor?->decompress($data);
             }
         } finally {
@@ -143,6 +150,45 @@ final class MobiDriver extends AbstractDriver
         return [$size, $byteCount, $pos];
     }
 
+    /**
+     * Reads exactly $length bytes or throws.
+     */
+    private function readBytes(\SplFileObject $file, int $length): string
+    {
+        if ($length < 0) {
+            throw new ParserException();
+        }
+        if (0 === $length) {
+            return '';
+        }
+
+        $data = '';
+        while (\strlen($data) < $length && !$file->eof()) {
+            $chunk = $file->fread($length - \strlen($data));
+            if (false === $chunk) {
+                throw new ParserException();
+            }
+            if ('' === $chunk) {
+                break;
+            }
+            $data .= $chunk;
+        }
+
+        if (\strlen($data) !== $length) {
+            throw new ParserException();
+        }
+
+        return $data;
+    }
+
+    /**
+     * Reads a big-endian unsigned integer of $length bytes or throws.
+     */
+    private function readInt(\SplFileObject $file, int $length): int
+    {
+        return (int) \hexdec(\bin2hex($this->readBytes($file, $length)));
+    }
+
     public function getCover(): ?EbookCoverInterface
     {
         // todo
@@ -159,15 +205,21 @@ final class MobiDriver extends AbstractDriver
 
         try {
             $palmDbData = $this->parsePalmDb($f);
-            $palmDocData = $this->parsePalmDoc($f);
+            $this->parsePalmDoc($f);
             $mobiData = $this->parseMobiHeader($f);
             $exthData = $this->parseExth($f);
 
+            if (!isset($palmDbData['records'][0])) {
+                throw new ParserException();
+            }
+
             $f->fseek($palmDbData['records'][0]['data_offset'] + $mobiData['full_name_offset']);
-            $title = $f->fread($mobiData['full_name_length']);
+            $title = $this->readBytes($f, $mobiData['full_name_length']);
         } finally {
             unset($f); // close file
         }
+
+        $publishDate = $exthData['publishDate'];
 
         return new MobiMeta(
             $title,
@@ -177,9 +229,9 @@ final class MobiDriver extends AbstractDriver
             $exthData['description'],
             $exthData['language'],
             $exthData['license'],
-            $exthData['publishDate'] ? (int) $exthData['publishDate']->format('Y') : null,
-            $exthData['publishDate'] ? (int) $exthData['publishDate']->format('m') : null,
-            $exthData['publishDate'] ? (int) $exthData['publishDate']->format('d') : null,
+            $publishDate
+                ? new PublishDate((int) $publishDate->format('Y'), (int) $publishDate->format('m'), (int) $publishDate->format('d'))
+                : new PublishDate(),
         );
     }
 
@@ -190,11 +242,7 @@ final class MobiDriver extends AbstractDriver
     {
         $f->fseek(4, \SEEK_CUR); // EXTH
         $f->fseek(4, \SEEK_CUR); // length
-        $rawRecords = $f->fread(4);
-        if (false === $rawRecords) {
-            throw new ParserException();
-        }
-        $records = (int) \hexdec(\bin2hex($rawRecords));
+        $records = $this->readInt($f, 4);
 
         $meta = [
             'author' => null,
@@ -207,26 +255,12 @@ final class MobiDriver extends AbstractDriver
             'coveroffset' => null,
         ];
         for ($i = 0; $i < $records; ++$i) {
-            $rawType = $f->fread(4);
-            if (false === $rawType) {
+            $type = $this->readInt($f, 4);
+            $length = $this->readInt($f, 4);
+            if ($length < 8) {
                 throw new ParserException();
             }
-            $rawLength = $f->fread(4);
-            if (false === $rawLength) {
-                throw new ParserException();
-            }
-
-            $type = \hexdec(\bin2hex($rawType));
-            $length = \hexdec(\bin2hex($rawLength));
-
-            if ($length > 0) {
-                $data = $f->fread($length - 8);
-                if (false === $data) {
-                    throw new ParserException();
-                }
-            } else {
-                $data = null;
-            }
+            $data = $this->readBytes($f, $length - 8);
 
             // https://wiki.mobileread.com/wiki/MOBI#EXTH_Header
             switch ($type) {
@@ -243,7 +277,11 @@ final class MobiDriver extends AbstractDriver
                     $meta['isbn'] = $data;
                     break;
                 case 106:
-                    $meta['publishDate'] = new \DateTimeImmutable($data, new \DateTimeZone('UTC'));
+                    try {
+                        $meta['publishDate'] = new \DateTimeImmutable($data, new \DateTimeZone('UTC'));
+                    } catch (\Throwable) {
+                        $meta['publishDate'] = null;
+                    }
                     break;
                 case 524:
                     $meta['language'] = $data;
@@ -264,7 +302,7 @@ final class MobiDriver extends AbstractDriver
      */
     protected function parsePalmDb(\SplFileObject $f): array
     {
-        $name = \mb_trim($f->fread(32));
+        $name = \mb_trim($this->readBytes($f, 32));
         /*
             bit field.
             0x0002 Read-Only
@@ -274,29 +312,29 @@ final class MobiDriver extends AbstractDriver
             0x0020 (32 decimal) Force the PalmPilot to reset after this database is installed
             0x0040 (64 decimal) Don't allow copy of file to be beamed to other Pilot.
          */
-        $attributes = \hexdec(\bin2hex($f->fread(2)));
-        if (\in_array($attributes, [0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040], true)) {
+        $attributes = $this->readInt($f, 2);
+        $version = $this->readInt($f, 2);
+        $creationDate = $this->readInt($f, 4);
+        $modificationDate = $this->readInt($f, 4);
+        $lastBackupDate = $this->readInt($f, 4);
+        $modificationNumber = $this->readInt($f, 4);
+        $appInfoId = $this->readInt($f, 4);
+        $sortInfoId = $this->readInt($f, 4);
+        $type = $this->readBytes($f, 4);
+        $creator = $this->readBytes($f, 4);
+        if ('BOOK' !== $type || 'MOBI' !== $creator) {
             throw new ParserException();
         }
-        $version = \hexdec(\bin2hex($f->fread(2)));
-        $creationDate = \hexdec(\bin2hex($f->fread(4)));
-        $modificationDate = \hexdec(\bin2hex($f->fread(4)));
-        $lastBackupDate = \hexdec(\bin2hex($f->fread(4)));
-        $modificationNumber = \hexdec(\bin2hex($f->fread(4)));
-        $appInfoId = \hexdec(\bin2hex($f->fread(4)));
-        $sortInfoId = \hexdec(\bin2hex($f->fread(4)));
-        $type = $f->fread(4);
-        $creator = $f->fread(4);
-        $uniqueIdSeed = \hexdec(\bin2hex($f->fread(4)));
-        $nextRecordListId = \hexdec(\bin2hex($f->fread(4)));
-        $recordsNumber = \hexdec(\bin2hex($f->fread(2)));
+        $uniqueIdSeed = $this->readInt($f, 4);
+        $nextRecordListId = $this->readInt($f, 4);
+        $recordsNumber = $this->readInt($f, 2);
 
         $records = [];
         for ($i = 0; $i < $recordsNumber; ++$i) {
             $records[] = [
-                'data_offset' => \hexdec(\bin2hex($f->fread(4))),
-                'attributes' => \hexdec(\bin2hex($f->fread(1))),
-                'unique_id' => $f->fread(3),
+                'data_offset' => $this->readInt($f, 4),
+                'attributes' => $this->readInt($f, 1),
+                'unique_id' => $this->readBytes($f, 3),
             ];
         }
 
@@ -314,11 +352,11 @@ final class MobiDriver extends AbstractDriver
      */
     protected function parsePalmDoc(\SplFileObject $f): array
     {
-        $compression = \hexdec(\bin2hex($f->fread(2))); // 1 == no compression, 2 = PalmDOC compression, 17480 = HUFF/CDIC compression
+        $compression = $this->readInt($f, 2); // 1 == no compression, 2 = PalmDOC compression, 17480 = HUFF/CDIC compression
         $f->fseek(2, \SEEK_CUR);
-        $textLength = \hexdec(\bin2hex($f->fread(4)));
-        $recordCount = \hexdec(\bin2hex($f->fread(2)));
-        $recordSize = \hexdec(\bin2hex($f->fread(2)));
+        $textLength = $this->readInt($f, 4);
+        $recordCount = $this->readInt($f, 2);
+        $recordSize = $this->readInt($f, 2);
         $f->fseek(4, \SEEK_CUR);
 
         return [
@@ -338,68 +376,67 @@ final class MobiDriver extends AbstractDriver
         if (false === $mobiHeaderStart) {
             throw new ParserException();
         }
-        if ('MOBI' !== $f->fread(4)) {
+        if ('MOBI' !== $this->readBytes($f, 4)) {
             throw new ParserException();
         }
-        $length = \hexdec(\bin2hex($f->fread(4)));
-        $type = \hexdec(\bin2hex($f->fread(4)));
-        $textEncoding = \hexdec(\bin2hex($f->fread(4))); // 1252 = CP1252; 65001 = UTF-8
-        $uniqueId = \hexdec(\bin2hex($f->fread(4)));
-        $fileVersion = \hexdec(\bin2hex($f->fread(4)));
+        $length = $this->readInt($f, 4);
+        $type = $this->readInt($f, 4);
+        $textEncoding = $this->readInt($f, 4); // 1252 = CP1252; 65001 = UTF-8
+        $uniqueId = $this->readInt($f, 4);
+        $fileVersion = $this->readInt($f, 4);
 
-        $ortographicIndex = \hexdec(\bin2hex($f->fread(4)));
-        $inflectionIndex = \hexdec(\bin2hex($f->fread(4)));
-        $indexNames = \hexdec(\bin2hex($f->fread(4)));
-        $indexKeys = \hexdec(\bin2hex($f->fread(4)));
-        $extraIndex0 = \hexdec(\bin2hex($f->fread(4)));
-        $extraIndex1 = \hexdec(\bin2hex($f->fread(4)));
-        $extraIndex2 = \hexdec(\bin2hex($f->fread(4)));
-        $extraIndex3 = \hexdec(\bin2hex($f->fread(4)));
-        $extraIndex4 = \hexdec(\bin2hex($f->fread(4)));
-        $extraIndex5 = \hexdec(\bin2hex($f->fread(4)));
+        $ortographicIndex = $this->readInt($f, 4);
+        $inflectionIndex = $this->readInt($f, 4);
+        $indexNames = $this->readInt($f, 4);
+        $indexKeys = $this->readInt($f, 4);
+        $extraIndex0 = $this->readInt($f, 4);
+        $extraIndex1 = $this->readInt($f, 4);
+        $extraIndex2 = $this->readInt($f, 4);
+        $extraIndex3 = $this->readInt($f, 4);
+        $extraIndex4 = $this->readInt($f, 4);
+        $extraIndex5 = $this->readInt($f, 4);
 
-        $firstNonBookIndex = \hexdec(\bin2hex($f->fread(4)));
-        $fullNameOffset = \hexdec(\bin2hex($f->fread(4)));
-        $fullNameLength = \hexdec(\bin2hex($f->fread(4)));
-        $locale = \hexdec(\bin2hex($f->fread(4)));
-        $inputLanguage = \hexdec(\bin2hex($f->fread(4)));
-        $outputLanguage = \hexdec(\bin2hex($f->fread(4)));
-        $minVersion = \hexdec(\bin2hex($f->fread(4)));
-        $firstImageIndex = \hexdec(\bin2hex($f->fread(4)));
-        $huffmanRecordOffset = \hexdec(\bin2hex($f->fread(4)));
-        $huffmanRecordCount = \hexdec(\bin2hex($f->fread(4)));
-        $huffmanTableOffset = \hexdec(\bin2hex($f->fread(4)));
-        $huffmanTableLength = \hexdec(\bin2hex($f->fread(4)));
-        $EXTHflags = \hexdec(\bin2hex($f->fread(4)));
-        // $outputLanguage = \hexdec(\bin2hex($f->fread(4)));
+        $firstNonBookIndex = $this->readInt($f, 4);
+        $fullNameOffset = $this->readInt($f, 4);
+        $fullNameLength = $this->readInt($f, 4);
+        $locale = $this->readInt($f, 4);
+        $inputLanguage = $this->readInt($f, 4);
+        $outputLanguage = $this->readInt($f, 4);
+        $minVersion = $this->readInt($f, 4);
+        $firstImageIndex = $this->readInt($f, 4);
+        $huffmanRecordOffset = $this->readInt($f, 4);
+        $huffmanRecordCount = $this->readInt($f, 4);
+        $huffmanTableOffset = $this->readInt($f, 4);
+        $huffmanTableLength = $this->readInt($f, 4);
+        $EXTHflags = $this->readInt($f, 4);
 
         $f->fseek(32, \SEEK_CUR); // 32 unknown bytes, if MOBI is long enough
 
         $f->fseek(4, \SEEK_CUR); // Unknown | Use 0xFFFFFFFF
 
-        $DRMOffset = \hexdec(\bin2hex($f->fread(4)));
-        $DRMCount = \hexdec(\bin2hex($f->fread(4)));
-        $DRMSize = \hexdec(\bin2hex($f->fread(4)));
-        $DRMFlags = \hexdec(\bin2hex($f->fread(4)));
+        $DRMOffset = $this->readInt($f, 4);
+        $DRMCount = $this->readInt($f, 4);
+        $DRMSize = $this->readInt($f, 4);
+        $DRMFlags = $this->readInt($f, 4);
 
         $f->fseek(8, \SEEK_CUR); // Bytes to the end of the MOBI header, including the following if the header length >= 228 (244 from start of record). Use 0x0000000000000000.
 
-        $firstContentRecordNumber = \hexdec(\bin2hex($f->fread(2)));
-        $lastContentRecordNumber = \hexdec(\bin2hex($f->fread(2)));
+        $firstContentRecordNumber = $this->readInt($f, 2);
+        $lastContentRecordNumber = $this->readInt($f, 2);
 
         $f->fseek(4, \SEEK_CUR); // Unknown	Use 0x00000001.
 
-        $FCISRecordNumber = \hexdec(\bin2hex($f->fread(4)));
-        $FCISRecordCount = \hexdec(\bin2hex($f->fread(4))); // Unknown
+        $FCISRecordNumber = $this->readInt($f, 4);
+        $FCISRecordCount = $this->readInt($f, 4); // Unknown
 
-        $FLISRecordNumber = \hexdec(\bin2hex($f->fread(4)));
-        $FLISRecordCount = \hexdec(\bin2hex($f->fread(4))); // Unknown
+        $FLISRecordNumber = $this->readInt($f, 4);
+        $FLISRecordCount = $this->readInt($f, 4); // Unknown
 
         $f->fseek(8, \SEEK_CUR); // Use 0x0000000000000000
         $f->fseek(4, \SEEK_CUR); // Use 0xFFFFFFFF.
 
-        $firstCompilationDataSectionCount = \hexdec(\bin2hex($f->fread(4)));
-        $numberOfCompilationDataSections = \hexdec(\bin2hex($f->fread(4)));
+        $firstCompilationDataSectionCount = $this->readInt($f, 4);
+        $numberOfCompilationDataSections = $this->readInt($f, 4);
 
         $f->fseek(4, \SEEK_CUR); // Use 0xFFFFFFFF.
         /*
@@ -412,9 +449,9 @@ final class MobiDriver extends AbstractDriver
          * Setting bit 2 (0x2) disables <guide><reference type="start"> functionality.
          */
         $f->fseek(2, \SEEK_CUR); // ?
-        $extraRecordDataFlags = \hexdec(\bin2hex($f->fread(2)));
+        $extraRecordDataFlags = $this->readInt($f, 2);
 
-        $INDXRecordOffset = \hexdec(\bin2hex($f->fread(4))); // (If not 0xFFFFFFFF)The record number of the first INDX record created from an ncx file.
+        $INDXRecordOffset = $this->readInt($f, 4); // (If not 0xFFFFFFFF)The record number of the first INDX record created from an ncx file.
 
         $f->fseek(4, \SEEK_CUR); // 0xFFFFFFFF In new MOBI file, the MOBI header length is 256, skip this to EXTH header.
         $f->fseek(4, \SEEK_CUR); // 0xFFFFFFFF In new MOBI file, the MOBI header length is 256, skip this to EXTH header.

@@ -13,10 +13,15 @@ use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\ImageMimeDetector\ImageMimeDetector;
 use EbookReader\ImageMimeDetector\ImageMimeDetectorInterface;
 
-readonly class EbookReaderFactory
+final class EbookReaderFactory
 {
+    private function __construct()
+    {
+    }
+
     /**
      * @throws UnsupportedFormatException
+     * @throws FileNotReadableException
      */
     public static function create(string $file, ImageMimeDetectorInterface $imageMimeDetector = new ImageMimeDetector()): EbookDriverInterface
     {
@@ -24,23 +29,55 @@ readonly class EbookReaderFactory
             throw new FileNotReadableException();
         }
 
-        $epub3Driver = new Epub3Driver($file, $imageMimeDetector);
-        if ($epub3Driver->isValid()) {
-            return $epub3Driver;
-        }
-        $mobiDriver = new MobiDriver($file, $imageMimeDetector);
-        if ($mobiDriver->isValid()) {
-            return $mobiDriver;
-        }
-        $fb2Driver = new Fb2Driver($file, $imageMimeDetector);
-        if ($fb2Driver->isValid()) {
-            return $fb2Driver;
-        }
-        $txtDriver = new TxtDriver($file, $imageMimeDetector);
-        if ($txtDriver->isValid()) {
-            return $txtDriver;
+        foreach (self::getCandidates($file, $imageMimeDetector) as $driver) {
+            if ($driver->isValid()) {
+                return $driver;
+            }
         }
 
         throw new UnsupportedFormatException();
+    }
+
+    /**
+     * Cheap magic-bytes sniffing to order drivers and skip obviously incompatible ones.
+     *
+     * @return EbookDriverInterface[]
+     */
+    private static function getCandidates(string $file, ImageMimeDetectorInterface $imageMimeDetector): array
+    {
+        $head = @\file_get_contents($file, false, null, 0, 68);
+        if (false === $head) {
+            return [
+                new Epub3Driver($file, $imageMimeDetector),
+                new MobiDriver($file, $imageMimeDetector),
+                new Fb2Driver($file, $imageMimeDetector),
+                new TxtDriver($file, $imageMimeDetector),
+            ];
+        }
+
+        // ZIP container: EPUB, FB2-ZIP or TXT-ZIP.
+        if (\str_starts_with($head, "PK\x03\x04")) {
+            return [
+                new Epub3Driver($file, $imageMimeDetector),
+                new Fb2Driver($file, $imageMimeDetector),
+                new TxtDriver($file, $imageMimeDetector),
+            ];
+        }
+
+        // Palm Database (MOBI): 4-byte type + 4-byte creator at offset 60.
+        if (\strlen($head) >= 68 && 'BOOKMOBI' === \substr($head, 60, 8)) {
+            return [
+                new MobiDriver($file, $imageMimeDetector),
+                new Fb2Driver($file, $imageMimeDetector),
+                new TxtDriver($file, $imageMimeDetector),
+            ];
+        }
+
+        // Plain XML (FB2) or plain text.
+        return [
+            new Fb2Driver($file, $imageMimeDetector),
+            new TxtDriver($file, $imageMimeDetector),
+            new MobiDriver($file, $imageMimeDetector),
+        ];
     }
 }

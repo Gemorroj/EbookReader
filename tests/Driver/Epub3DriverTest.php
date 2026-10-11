@@ -7,6 +7,7 @@ namespace EbookReader\Tests\Driver;
 use EbookReader\Data\Epub3Data;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
+use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 final class Epub3DriverTest extends TestCase
 {
     #[DataProvider('filesMetaProvider')]
-    public function testIsValid(string $file, ...$args): void
+    public function testIsValid(string $file, mixed ...$args): void
     {
         $driver = new Epub3Driver($file);
         $result = $driver->isValid();
@@ -91,9 +92,10 @@ final class Epub3DriverTest extends TestCase
         self::assertSame($expectedDescription, $meta->getDescription());
         self::assertSame($expectedLanguage, $meta->getLanguage());
         self::assertSame($expectedLicense, $meta->getLicense());
-        self::assertSame($expectedPublishYear, $meta->getPublishYear());
-        self::assertSame($expectedPublishMonth, $meta->getPublishMonth());
-        self::assertSame($expectedPublishDay, $meta->getPublishDay());
+        $publishDate = $meta->getPublishDate();
+        self::assertSame($expectedPublishYear, $publishDate->getYear());
+        self::assertSame($expectedPublishMonth, $publishDate->getMonth());
+        self::assertSame($expectedPublishDay, $publishDate->getDay());
     }
 
     #[DataProvider('filesCoverProvider')]
@@ -134,6 +136,43 @@ final class Epub3DriverTest extends TestCase
         $driver = new Epub3Driver($file);
         $this->expectException(ParserException::class);
         $driver->getMeta();
+    }
+
+    public function testGetMetaEdgeCases(): void
+    {
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/edge-cases.epub');
+        self::assertTrue($driver->isValid());
+
+        $meta = $driver->getMeta();
+        self::assertSame('Edge Cases', $meta->getTitle());
+        self::assertNull($meta->getLanguage());
+        self::assertTrue($meta->getPublishDate()->isEmpty());
+    }
+
+    public function testGetMetaMonthOnlyDate(): void
+    {
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/date-month.epub');
+        self::assertTrue($driver->isValid());
+
+        $publishDate = $driver->getMeta()->getPublishDate();
+        self::assertSame(2008, $publishDate->getYear());
+        self::assertSame(5, $publishDate->getMonth());
+        self::assertNull($publishDate->getDay());
+    }
+
+    public function testGetMetaUnsupportedVersion(): void
+    {
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/version-unsupported.epub');
+        self::assertTrue($driver->isValid());
+
+        $this->expectException(UnsupportedFormatException::class);
+        $driver->getMeta();
+    }
+
+    public function testGetCoverWithoutCover(): void
+    {
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/edge-cases.epub');
+        self::assertNull($driver->getCover());
     }
 
     public static function filesProviderFake(): \Generator

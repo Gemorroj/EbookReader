@@ -6,8 +6,6 @@ namespace EbookReader;
 
 interface EbookDriverInterface
 {
-    public function __construct(string $file);
-
     public function getCover(): ?EbookCoverInterface;
 
     /**

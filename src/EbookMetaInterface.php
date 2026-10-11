@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace EbookReader;
 
+use EbookReader\Meta\PublishDate;
+
 interface EbookMetaInterface
 {
     public function getTitle(): string;
@@ -19,11 +21,7 @@ interface EbookMetaInterface
      */
     public function getDescription(): ?string;
 
-    public function getPublishYear(): ?int;
-
-    public function getPublishMonth(): ?int;
-
-    public function getPublishDay(): ?int;
+    public function getPublishDate(): PublishDate;
 
     public function getLanguage(): ?string;
 

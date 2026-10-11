@@ -16,9 +16,7 @@ final readonly class TxtMeta implements EbookMetaInterface
         private ?string $description = null,
         private ?string $language = null,
         private ?string $license = null,
-        private ?int $publishYear = null,
-        private ?int $publishMonth = null,
-        private ?int $publishDay = null,
+        private PublishDate $publishDate = new PublishDate(),
     ) {
     }
 
@@ -57,18 +55,8 @@ final readonly class TxtMeta implements EbookMetaInterface
         return $this->license;
     }
 
-    public function getPublishYear(): ?int
+    public function getPublishDate(): PublishDate
     {
-        return $this->publishYear;
-    }
-
-    public function getPublishMonth(): ?int
-    {
-        return $this->publishMonth;
-    }
-
-    public function getPublishDay(): ?int
-    {
-        return $this->publishDay;
+        return $this->publishDate;
     }
 }

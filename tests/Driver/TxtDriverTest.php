@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 final class TxtDriverTest extends TestCase
 {
     #[DataProvider('filesProvider')]
-    public function testIsValid(string $file, ...$args): void
+    public function testIsValid(string $file, mixed ...$args): void
     {
         $driver = new TxtDriver($file);
         $result = $driver->isValid();
@@ -42,9 +42,7 @@ final class TxtDriverTest extends TestCase
         self::assertNull($meta->getDescription());
         self::assertNull($meta->getLanguage());
         self::assertNull($meta->getLicense());
-        self::assertNull($meta->getPublishYear());
-        self::assertNull($meta->getPublishMonth());
-        self::assertNull($meta->getPublishDay());
+        self::assertTrue($meta->getPublishDate()->isEmpty());
     }
 
     #[DataProvider('filesProviderFake')]
@@ -55,12 +53,28 @@ final class TxtDriverTest extends TestCase
         $driver->getMeta();
     }
 
+    public function testSingleLineWithoutTitle(): void
+    {
+        $driver = new TxtDriver(__DIR__.'/../fixtures/txt/single-line.txt');
+
+        $data = $driver->getData();
+        self::assertCount(1, $data);
+        self::assertNull($data[0]->getTitle());
+        self::assertSame('Single line without any newline', $data[0]->getText());
+
+        self::assertSame('Single line without any newline', $driver->getMeta()->getTitle());
+    }
+
     public static function filesProviderFake(): \Generator
     {
         yield [__DIR__.'/../fixtures/fake.xml-not-found'];
         yield [__DIR__.'/../fixtures/fake.zip'];
     }
 
+    /**
+     * @param non-empty-string $expectedStartText
+     * @param non-empty-string $expectedEndText
+     */
     #[DataProvider('filesDataProvider')]
     public function testGetData(
         string $file,
