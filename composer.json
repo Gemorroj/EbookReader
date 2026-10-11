@@ -18,9 +18,9 @@
         "ext-mbstring": "*"
     },
     "require-dev": {
-        "phpunit/phpunit": "^13",
+        "phpunit/phpunit": "^13.4",
         "friendsofphp/php-cs-fixer": "^3.95",
-        "phpstan/phpstan": "^2.2"
+        "phpstan/phpstan": "^2.3"
     },
     "autoload": {
         "psr-4": {
