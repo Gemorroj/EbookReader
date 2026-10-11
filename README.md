@@ -6,12 +6,12 @@
 
 
 ### Formats:
-| Format | Versions | Cover | Content |
-| --- | --- | --- | --- |
-| EPUB | 2 and 3 | yes | HTML fragments + styles |
-| MOBI | uncompressed, PalmDOC, HUFF/CDIC | no | HTML |
-| FB2 | 2.x, plain or ZIP | yes | HTML fragments |
-| TXT | plain or ZIP | ZIP only | plain text |
+| Format | Versions | Cover | Inline images | Content |
+| --- | --- | --- | --- | --- |
+| EPUB | 2 and 3 | yes | yes | HTML fragments + styles |
+| MOBI | uncompressed, PalmDOC, HUFF/CDIC | no | yes | HTML |
+| FB2 | 2.x, plain or ZIP | yes | yes | HTML fragments |
+| TXT | plain or ZIP | ZIP only | no | plain text |
 
 Format detection is automatic (`EbookReaderFactory::create()`).
 
@@ -48,9 +48,14 @@ $data = $ebookReader->getData();          // EbookDataInterface[]
 foreach ($data as $section) {
     echo $section->getTitle();
     echo $section->getText();             // markup as-is (usually HTML)
+
+    // inline images; getPath() matches a src/href (EPUB, FB2) or recindex (MOBI) value in getText()
+    foreach ($section->getResources() as $resource) {
+        file_put_contents(basename($resource->getPath()), $resource->getData());
+    }
 }
 
-$cover = $ebookReader->getCover();        // ?EbookCoverInterface
+$cover = $ebookReader->getCover();        // ?EbookReader\Cover\Cover
 if ($cover) {
     file_put_contents('cover', $cover->getData());
 }

@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Cover\Cover;
 use EbookReader\Data\MobiData;
 use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\HuffCdic;
 use EbookReader\Decompressor\NoCompression;
 use EbookReader\Decompressor\PalmDocLz77;
-use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\MobiMeta;
 use EbookReader\Meta\PublishDate;
+use EbookReader\Resource\Resource;
 
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI
@@ -97,13 +98,52 @@ final class MobiDriver extends AbstractDriver
                 $text = \substr($text, 0, $textLength);
             }
             $text = $this->decodeText($text, $mobiData['text_encoding']);
+
+            $resources = $this->collectResources($f, $palmDbData['records'], $mobiData, $text, $fileSize);
         } finally {
             unset($f); // close file
         }
 
         return [
-            new MobiData($text, $title, []),
+            new MobiData($text, $title, [], $resources),
         ];
+    }
+
+    /**
+     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                              $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int} $mobiData
+     *
+     * @return resource[]
+     */
+    private function collectResources(\SplFileObject $f, array $records, array $mobiData, string $text, int $fileSize): array
+    {
+        if (!\preg_match_all('~recindex="(\d+)"~i', $text, $matches)) {
+            return [];
+        }
+
+        $resources = [];
+        $seen = [];
+        foreach ($matches[1] as $recindex) {
+            if (isset($seen[$recindex])) {
+                continue;
+            }
+            $seen[$recindex] = true;
+
+            $recordIndex = $mobiData['first_image_index'] + (int) $recindex - 1;
+            if ($recordIndex <= 0 || !isset($records[$recordIndex])) {
+                continue;
+            }
+
+            $data = $this->readRecord($f, $records, $recordIndex, $fileSize);
+            $mime = $this->getImageMimeDetector()->detect($data);
+            if (null === $mime) {
+                continue;
+            }
+
+            $resources[] = new Resource($recindex, $data, $mime);
+        }
+
+        return $resources;
     }
 
     /**
@@ -126,8 +166,8 @@ final class MobiDriver extends AbstractDriver
     /**
      * PalmDOC is self-contained; HUFF/CDIC needs the HUFF + CDIC records read from the PDB.
      *
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                      $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int} $mobiData
+     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                              $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int} $mobiData
      */
     private function createDecompressor(\SplFileObject $f, array $records, array $mobiData, int $compression): DecompressorInterface
     {
@@ -140,8 +180,8 @@ final class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                      $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int} $mobiData
+     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                              $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int} $mobiData
      */
     private function makeHuffCdic(\SplFileObject $f, array $records, array $mobiData): HuffCdic
     {
@@ -281,7 +321,7 @@ final class MobiDriver extends AbstractDriver
         return (int) \hexdec(\bin2hex($this->readBytes($file, $length)));
     }
 
-    public function getCover(): ?EbookCoverInterface
+    public function getCover(): ?Cover
     {
         // todo
         throw new \RuntimeException('Not implemented');
@@ -461,7 +501,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * @see https://wiki.mobileread.com/wiki/MOBI#MOBI_Header
      *
-     * @return array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int}
+     * @return array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int}
      */
     protected function parseMobiHeader(\SplFileObject $f): array
     {
@@ -564,6 +604,7 @@ final class MobiDriver extends AbstractDriver
             'huffman_record_offset' => $huffmanRecordOffset,
             'huffman_record_count' => $huffmanRecordCount,
             'first_non_book_index' => $firstNonBookIndex,
+            'first_image_index' => $firstImageIndex,
         ];
     }
 }

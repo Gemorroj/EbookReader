@@ -189,6 +189,17 @@ final class Epub3DriverTest extends TestCase
         self::assertSame('image/jpeg', $cover->getMime());
     }
 
+    public function testInlineImageResources(): void
+    {
+        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-opf2.epub');
+        $resources = $driver->getData()[0]->getResources();
+
+        self::assertNotEmpty($resources);
+        self::assertSame('images/GeographyofBli-cover.jpg', $resources[0]->getPath());
+        self::assertSame('image/jpeg', $resources[0]->getMime());
+        self::assertNotSame('', $resources[0]->getData());
+    }
+
     public static function filesProviderFake(): \Generator
     {
         yield [__DIR__.'/../fixtures/fake.xml'];

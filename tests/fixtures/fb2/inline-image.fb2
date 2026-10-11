@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <description>
+        <title-info>
+            <genre>sf</genre>
+            <author>
+                <first-name>Ivan</first-name>
+                <last-name>Petrov</last-name>
+            </author>
+            <book-title>Inline Image</book-title>
+            <lang>en</lang>
+        </title-info>
+        <document-info>
+            <author>
+                <nickname>anon</nickname>
+            </author>
+            <program-used>test</program-used>
+            <date>2020</date>
+        </document-info>
+    </description>
+    <body>
+        <section>
+            <title>
+                <p>Chapter</p>
+            </title>
+            <p>Before</p>
+            <image xlink:href="#pic"/>
+            <p>After</p>
+        </section>
+    </body>
+    <binary id="pic" content-type="image/png">iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==</binary>
+</FictionBook>

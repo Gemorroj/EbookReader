@@ -86,6 +86,21 @@ final class Fb2DriverTest extends TestCase
         self::assertNull($driver->getCover());
     }
 
+    public function testInlineImageResources(): void
+    {
+        $driver = new Fb2Driver(__DIR__.'/../fixtures/fb2/inline-image.fb2');
+        self::assertTrue($driver->isValid());
+
+        $data = $driver->getData();
+        self::assertCount(1, $data);
+
+        $resources = $data[0]->getResources();
+        self::assertCount(1, $resources);
+        self::assertSame('#pic', $resources[0]->getPath());
+        self::assertSame('image/png', $resources[0]->getMime());
+        self::assertNotSame('', $resources[0]->getData());
+    }
+
     public static function filesProviderFake(): \Generator
     {
         yield [__DIR__.'/../fixtures/fake.xml'];

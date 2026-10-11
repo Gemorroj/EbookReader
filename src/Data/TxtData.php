@@ -5,18 +5,29 @@ declare(strict_types=1);
 namespace EbookReader\Data;
 
 use EbookReader\EbookDataInterface;
+use EbookReader\Resource\Resource;
 use EbookReader\Resource\Style;
 
 final readonly class TxtData implements EbookDataInterface
 {
     /**
-     * @param Style[] $styles
+     * @param Style[]    $styles
+     * @param resource[] $resources
      */
     public function __construct(
         private string $text,
         private ?string $title,
         private array $styles = [],
+        private array $resources = [],
     ) {
+    }
+
+    /**
+     * @return resource[]
+     */
+    public function getResources(): array
+    {
+        return $this->resources;
     }
 
     public function getText(): string

@@ -7,10 +7,10 @@ namespace EbookReader\Driver;
 use EbookReader\Cover\Cover;
 use EbookReader\Data\Fb2Data;
 use EbookReader\Data\Fb2DataEpigraph;
-use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\Fb2Meta;
 use EbookReader\Meta\PublishDate;
+use EbookReader\Resource\Resource;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 
@@ -82,7 +82,55 @@ final class Fb2Driver extends AbstractDriver
             }
         }
 
-        return new Fb2Data($text, $title, $annotation, $epigraphs, $styles);
+        return new Fb2Data($text, $title, $annotation, $epigraphs, $styles, $this->collectResources($sectionNode));
+    }
+
+    /**
+     * @return resource[]
+     */
+    private function collectResources(\DOMElement $sectionNode): array
+    {
+        $resources = [];
+        $seen = [];
+        /** @var \DOMElement $imageNode */
+        foreach ($sectionNode->getElementsByTagName('image') as $imageNode) {
+            $ref = $this->getHrefAttribute($imageNode);
+            if ('' === $ref || '#' !== $ref[0] || isset($seen[$ref])) {
+                continue;
+            }
+            $seen[$ref] = true;
+
+            try {
+                $binaryNode = $this->getFictionBookBinaryById(\substr($ref, 1));
+            } catch (ParserException) {
+                continue;
+            }
+
+            $data = \base64_decode($binaryNode->textContent, true);
+            if (false === $data) {
+                continue;
+            }
+
+            $mime = $binaryNode->getAttribute('content-type');
+            if ('' === $mime) {
+                $mime = $this->getImageMimeDetector()->detect($data) ?? '';
+            }
+
+            $resources[] = new Resource($ref, $data, $mime);
+        }
+
+        return $resources;
+    }
+
+    private function getHrefAttribute(\DOMElement $node): string
+    {
+        foreach ($node->attributes as $attribute) {
+            if ('href' === $attribute->localName) {
+                return $attribute->value;
+            }
+        }
+
+        return '';
     }
 
     private function makeText(\DOMElement $node, bool $rowFrame = false): string
@@ -99,7 +147,7 @@ final class Fb2Driver extends AbstractDriver
                 continue;
             }
 
-            if (\in_array($childNode->tagName, ['p', 'table', 'strong', 'emphasis', 'style', 'strikethrough', 'sub', 'sup', 'code'], true)) {
+            if (\in_array($childNode->tagName, ['p', 'table', 'strong', 'emphasis', 'style', 'strikethrough', 'sub', 'sup', 'code', 'image'], true)) {
                 $text[] = $node->ownerDocument->saveHTML($childNode);
             }
             if ('cite' === $childNode->tagName) {
@@ -137,7 +185,7 @@ final class Fb2Driver extends AbstractDriver
         return \implode(' ', $author);
     }
 
-    public function getCover(): ?EbookCoverInterface
+    public function getCover(): ?Cover
     {
         // http://www.fictionbook.org/index.php/%D0%AD%D0%BB%D0%B5%D0%BC%D0%B5%D0%BD%D1%82_coverpage
 

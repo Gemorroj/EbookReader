@@ -6,11 +6,11 @@ namespace EbookReader\Driver;
 
 use EbookReader\Cover\Cover;
 use EbookReader\Data\Epub3Data;
-use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Meta\Epub3Meta;
 use EbookReader\Meta\PublishDate;
+use EbookReader\Resource\Resource;
 use EbookReader\Resource\Style;
 use EbookReader\Resource\StyleType;
 
@@ -44,13 +44,21 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * Resolves a manifest href (URL-encoded and possibly relative) to a ZIP entry name.
+     * Resolves a (URL-encoded, possibly relative) href to a ZIP entry name.
+     * The base defaults to the package directory; pass the containing
+     * document directory to resolve references inside content documents.
      */
-    private function resolveZipPath(string $href): string
+    private function resolveZipPath(string $href, ?string $baseDir = null): string
     {
         $path = \rawurldecode($href);
-        if (null !== $this->packageDirectory && '.' !== $this->packageDirectory) {
-            $path = $this->packageDirectory.'/'.$path;
+        $fragment = \strpos($path, '#');
+        if (false !== $fragment) {
+            $path = \substr($path, 0, $fragment);
+        }
+
+        $base = $baseDir ?? $this->packageDirectory;
+        if (null !== $base && '' !== $base && '.' !== $base) {
+            $path = $base.'/'.$path;
         }
 
         $parts = [];
@@ -66,6 +74,50 @@ final class Epub3Driver extends AbstractDriver
         }
 
         return \implode('/', $parts);
+    }
+
+    /**
+     * @return resource[]
+     */
+    private function collectResources(\ZipArchive $zip, \DOMDocument $dom, string $baseDir): array
+    {
+        $resources = [];
+        $seen = [];
+        foreach ($dom->getElementsByTagName('*') as $node) {
+            $name = \strtolower($node->localName ?? $node->nodeName);
+            if ('img' === $name) {
+                $ref = $node->getAttribute('src');
+            } elseif ('image' === $name) {
+                $ref = $this->getHrefAttribute($node);
+            } else {
+                continue;
+            }
+
+            if ('' === $ref || '#' === $ref[0] || isset($seen[$ref]) || \preg_match('~^[a-z][a-z0-9+.-]*:~i', $ref)) {
+                continue;
+            }
+            $seen[$ref] = true;
+
+            $content = $zip->getFromName($this->resolveZipPath($ref, $baseDir));
+            if (false === $content) {
+                continue;
+            }
+
+            $resources[] = new Resource($ref, $content, $this->getImageMimeDetector()->detect($content) ?? '');
+        }
+
+        return $resources;
+    }
+
+    private function getHrefAttribute(\DOMElement $node): string
+    {
+        foreach ($node->attributes as $attribute) {
+            if ('href' === $attribute->localName) {
+                return $attribute->value;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -177,7 +229,9 @@ final class Epub3Driver extends AbstractDriver
 
                 $text = '<div'.$bodyClass.$bodyStyle.'>'.$text.'</div>';
 
-                $data[] = new Epub3Data($text, $title, $styles, $isNavigation);
+                $resources = $this->collectResources($zip, $domFile, \dirname($zipFilePath));
+
+                $data[] = new Epub3Data($text, $title, $styles, $isNavigation, $resources);
             }
         } finally {
             $zip->close();
@@ -186,7 +240,7 @@ final class Epub3Driver extends AbstractDriver
         return $data;
     }
 
-    public function getCover(): ?EbookCoverInterface
+    public function getCover(): ?Cover
     {
         // https://wiki.mobileread.com/wiki/Ebook_Covers
 

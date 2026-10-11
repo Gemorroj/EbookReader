@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Cover;
 
-use EbookReader\EbookCoverInterface;
-
-final readonly class Cover implements EbookCoverInterface
+final readonly class Cover
 {
     public function __construct(
         private string $data,

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace EbookReader;
 
+use EbookReader\Cover\Cover;
+
 interface EbookDriverInterface
 {
-    public function getCover(): ?EbookCoverInterface;
+    public function getCover(): ?Cover;
 
     /**
      * @return EbookDataInterface[]

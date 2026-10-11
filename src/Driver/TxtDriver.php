@@ -6,7 +6,6 @@ namespace EbookReader\Driver;
 
 use EbookReader\Cover\Cover;
 use EbookReader\Data\TxtData;
-use EbookReader\EbookCoverInterface;
 use EbookReader\Exception\ParserException;
 use EbookReader\Meta\TxtMeta;
 
@@ -116,7 +115,7 @@ final class TxtDriver extends AbstractDriver
         ];
     }
 
-    public function getCover(): ?EbookCoverInterface
+    public function getCover(): ?Cover
     {
         $cover = null;
         $zip = new \ZipArchive();

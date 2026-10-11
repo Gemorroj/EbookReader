@@ -118,6 +118,17 @@ final class MobiDriverTest extends TestCase
         self::assertStringContainsString('This is a sample for testing libmobi project.', $text);
     }
 
+    public function testInlineImageResources(): void
+    {
+        $driver = new MobiDriver(__DIR__.'/../fixtures/mobi/huffcdic.mobi');
+        $resources = $driver->getData()[0]->getResources();
+
+        self::assertNotEmpty($resources);
+        self::assertSame('00001', $resources[0]->getPath());
+        self::assertStringStartsWith('image/', $resources[0]->getMime());
+        self::assertNotSame('', $resources[0]->getData());
+    }
+
     public function testHuffCdic(): void
     {
         $file = \tempnam(\sys_get_temp_dir(), 'mobi');
