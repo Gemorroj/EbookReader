@@ -98,9 +98,15 @@ final class EbookReaderFactoryTest extends TestCase
         \file_put_contents($file, "Caf\xE9"); // "Café" in Windows-1252
 
         try {
+            // By default the charset is detected.
+            $reader = EbookReaderFactory::create($file);
+            self::assertInstanceOf(TxtDriver::class, $reader);
+            self::assertSame("Caf\xC3\xA9", $reader->getSections()[0]->getContent());
+
+            // Strict refuses undeclared non-UTF-8 text.
             try {
-                EbookReaderFactory::create($file);
-                self::fail('Non-UTF-8 text must not be detected by default');
+                EbookReaderFactory::create($file, textDecoder: TextDecoder::strict());
+                self::fail('Strict decoding must reject undeclared non-UTF-8 text');
             } catch (UnsupportedFormatException) {
             }
 

@@ -11,24 +11,48 @@ use EbookReader\Exception\ParserException;
  *
  * Bytes are returned as-is when they are valid UTF-8 or carry a BOM; a charset
  * declared by the format is honored next. Only bytes that are none of the above
- * reach the configured fallback (strict by default).
+ * reach the configured fallback (detect by default).
  *
- * The DETECT fallback ranks candidate single-byte encodings by how plausible
- * their decoded text looks and picks the best one above a threshold, so a wrong
- * charset is not applied confidently (the idea is borrowed from
- * Gemorroj/Archive7z).
+ * The DETECT fallback decodes the sample with each candidate encoding and keeps
+ * the most plausible one: it rewards a single dominant script, a letter
+ * frequency profile that matches the script's language, and a clean multi-byte
+ * decode, while rejecting binary and mixed-script decodes. Bytes that nothing
+ * explains confidently are refused rather than guessed.
+ * (the idea is borrowed from Gemorroj/Archive7z).
  */
 final readonly class TextDecoder implements TextDecoderInterface
 {
     /**
      * Candidate encodings tried by {@see TextDecoding::DETECT}, in preference order.
+     * The plausibility score discriminates them, so the order only breaks ties.
+     *
+     * GB18030 is the only CJK candidate: it is a strict superset that can encode
+     * the whole repertoire, while Big5/Shift_JIS/EUC cannot be told apart from it
+     * (and from each other) by byte structure alone. Declare those explicitly if
+     * needed.
      */
-    public const array DETECT_CANDIDATES = ['Windows-1251', 'CP866', 'KOI8-R', 'ISO-8859-5', 'Windows-1252'];
+    public const array DETECT_CANDIDATES = [
+        'Windows-1251',
+        'KOI8-R',
+        'CP866',
+        'ISO-8859-5',
+        'Windows-1252',
+        'ISO-8859-1',
+        'ISO-8859-15',
+        'Windows-1250',
+        'ISO-8859-2',
+        'Windows-1253',
+        'Windows-1254',
+        'Windows-1255',
+        'Windows-1256',
+        'Windows-1257',
+        'GB18030',
+    ];
 
     /**
      * Minimum plausibility score for a detected encoding to be trusted.
      */
-    private const float DETECT_MIN_SCORE = 0.3;
+    private const float DETECT_MIN_SCORE = 0.45;
 
     /**
      * Detection only samples the beginning of the text; the winning encoding is
@@ -37,10 +61,43 @@ final readonly class TextDecoder implements TextDecoderInterface
     private const int DETECT_SAMPLE_SIZE = 16384;
 
     /**
+     * Scripts considered when scoring a decode, as Unicode property names.
+     */
+    private const array SCRIPTS = ['Latin', 'Cyrillic', 'Greek', 'Hebrew', 'Arabic', 'Han', 'Hiragana', 'Katakana', 'Hangul', 'Thai'];
+
+    /**
+     * Multi-byte encodings: a decode that stays valid on high-byte-rich input is
+     * a strong signal, since a single-byte guess would win on letter-likeness.
+     */
+    private const array MULTIBYTE_ENCODINGS = ['GB18030'];
+
+    /**
+     * Letter frequency profiles (lowercased) used to tell apart encodings that
+     * decode to the same script, e.g. the Cyrillic single-byte family.
+     */
+    private const array SCRIPT_FREQUENCIES = [
+        'Cyrillic' => [
+            'о' => 0.1097, 'е' => 0.0845, 'а' => 0.0801, 'и' => 0.0735, 'н' => 0.0670, 'т' => 0.0626,
+            'с' => 0.0547, 'р' => 0.0473, 'в' => 0.0454, 'л' => 0.0440, 'к' => 0.0349, 'м' => 0.0321,
+            'д' => 0.0298, 'п' => 0.0281, 'у' => 0.0262, 'я' => 0.0201, 'ы' => 0.0190, 'ь' => 0.0174,
+            'г' => 0.0170, 'з' => 0.0165, 'б' => 0.0159, 'ч' => 0.0144, 'й' => 0.0121, 'х' => 0.0097,
+            'ж' => 0.0094, 'ш' => 0.0073, 'ю' => 0.0064, 'ц' => 0.0048, 'щ' => 0.0036, 'э' => 0.0032,
+            'ф' => 0.0026, 'ъ' => 0.0004, 'ё' => 0.0004,
+        ],
+        'Latin' => [
+            'e' => 0.12702, 't' => 0.09056, 'a' => 0.08167, 'o' => 0.07507, 'i' => 0.06966, 'n' => 0.06749,
+            's' => 0.06327, 'h' => 0.06094, 'r' => 0.05987, 'd' => 0.04253, 'l' => 0.04025, 'c' => 0.02782,
+            'u' => 0.02758, 'm' => 0.02406, 'w' => 0.02360, 'f' => 0.02228, 'g' => 0.02015, 'y' => 0.01974,
+            'p' => 0.01929, 'b' => 0.01492, 'v' => 0.00978, 'k' => 0.00772, 'j' => 0.00153, 'x' => 0.00150,
+            'q' => 0.00095, 'z' => 0.00074,
+        ],
+    ];
+
+    /**
      * @param string[]|null $detectCandidates candidate encodings for DETECT, in preference order
      */
     public function __construct(
-        private TextDecoding $strategy = TextDecoding::STRICT,
+        private TextDecoding $strategy = TextDecoding::DETECT,
         private ?string $encoding = null,
         private ?\Closure $callback = null,
         private ?array $detectCandidates = null,
@@ -52,7 +109,7 @@ final readonly class TextDecoder implements TextDecoderInterface
      */
     public static function strict(): self
     {
-        return new self();
+        return new self(TextDecoding::STRICT);
     }
 
     /**
@@ -151,47 +208,91 @@ final readonly class TextDecoder implements TextDecoderInterface
     }
 
     /**
-     * Average plausibility of decoding the sample with the encoding.
-     *
-     * @return float 0.0..1.0, or -INF when the encoding cannot represent the bytes
+     * Plausibility (0.0..1.0) of decoding the sample with the encoding, or -INF
+     * when the result is binary, unreadable or otherwise not text.
      */
     private static function score(string $encoding, string $sample): float
     {
-        $sum = 0.0;
-        $lines = 0;
-        foreach (\explode("\n", $sample) as $line) {
-            if ('' === $line) {
-                continue;
-            }
-            $decoded = self::tryConvert($line, $encoding);
-            if (null === $decoded) {
-                return -\INF;
-            }
-            $sum += self::scoreText($decoded);
-            ++$lines;
+        $decoded = self::tryConvert($sample, $encoding);
+        if (null === $decoded) {
+            return -\INF;
         }
 
-        return $lines > 0 ? $sum / $lines : 0.0;
+        $length = \mb_strlen($decoded, 'UTF-8');
+        if (0 === $length) {
+            return -\INF;
+        }
+
+        // Reject binary-ish decodes: control and unassigned/replacement characters.
+        $control = (int) \preg_match_all('/[\x{00}-\x{08}\x{0B}\x{0C}\x{0E}-\x{1F}\x{7F}-\x{9F}]/u', $decoded);
+        $broken = (int) \preg_match_all('/[\x{FFFD}\p{Cn}\p{Co}\p{Cs}]/u', $decoded);
+        if (($control + $broken) > 0.02 * $length) {
+            return -\INF;
+        }
+
+        $letters = (int) \preg_match_all('/\p{L}/u', $decoded);
+        if (0 === $letters) {
+            return -\INF;
+        }
+
+        // Dominant script and how pure the decode is (mixing scripts is suspicious).
+        $dominant = '';
+        $dominantCount = 0;
+        foreach (self::SCRIPTS as $script) {
+            $count = (int) \preg_match_all('/\p{'.$script.'}/u', $decoded);
+            if ($count > $dominantCount) {
+                $dominantCount = $count;
+                $dominant = $script;
+            }
+        }
+
+        $purity = $dominantCount / $letters;
+        $score = 0.5 * $purity + 0.5 * self::frequencyMatch($dominant, $decoded);
+
+        // A valid multi-byte decode of high-byte-rich input is a strong signal.
+        if (\in_array($encoding, self::MULTIBYTE_ENCODINGS, true) && 0 === $broken) {
+            $score += 0.5;
+        }
+
+        return $score;
     }
 
     /**
-     * Plausibility of a decoded text: letters and digits score well, control and
-     * unassigned characters score poorly.
-     *
-     * @return float 0.0..1.0
+     * Cosine similarity (0.0..1.0) between the decoded letters and the script's
+     * reference frequency profile; 0.5 when the script has no profile.
      */
-    private static function scoreText(string $text): float
+    private static function frequencyMatch(string $script, string $decoded): float
     {
-        $length = \mb_strlen($text, 'UTF-8');
-        if (0 === $length) {
+        $model = self::SCRIPT_FREQUENCIES[$script] ?? null;
+        if (null === $model) {
+            return 0.5;
+        }
+
+        $counts = [];
+        $total = 0;
+        \preg_match_all('/\p{'.$script.'}/u', $decoded, $matches);
+        foreach ($matches[0] as $letter) {
+            $letter = \mb_strtolower($letter, 'UTF-8');
+            if (isset($model[$letter])) {
+                $counts[$letter] = ($counts[$letter] ?? 0) + 1;
+                ++$total;
+            }
+        }
+        if (0 === $total) {
             return 0.0;
         }
 
-        $good = (int) \preg_match_all('/[\p{L}\p{N}]/u', $text);
-        $neutral = (int) \preg_match_all('/[\p{Zs}\p{P}\p{S}]/u', $text);
-        $bad = (int) \preg_match_all('/[\x{00}-\x{08}\x{0B}\x{0C}\x{0E}-\x{1F}\x{7F}-\x{9F}\x{FFFD}\p{Cn}\p{Co}\p{Cs}]/u', $text);
+        $dot = 0.0;
+        $observedNorm = 0.0;
+        $modelNorm = 0.0;
+        foreach ($model as $letter => $weight) {
+            $observed = ($counts[$letter] ?? 0) / $total;
+            $dot += $observed * $weight;
+            $observedNorm += $observed * $observed;
+            $modelNorm += $weight * $weight;
+        }
 
-        return ($good + 0.5 * $neutral - 2.0 * $bad) / $length;
+        return $observedNorm > 0.0 ? $dot / (\sqrt($observedNorm) * \sqrt($modelNorm)) : 0.0;
     }
 
     /**
@@ -213,6 +314,7 @@ final readonly class TextDecoder implements TextDecoderInterface
     private static function tryConvert(string $bytes, string $encoding): ?string
     {
         try {
+            \mb_substitute_character(0xFFFD);
             $converted = \mb_convert_encoding($bytes, 'UTF-8', $encoding);
         } catch (\ValueError) {
             return null;

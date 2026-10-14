@@ -59,11 +59,36 @@ final class TextDecoderTest extends TestCase
         self::assertSame('Hi', new TextDecoder()->toUtf8("\x00\x00\xFE\xFF".$utf32));
     }
 
-    public function testStrictThrowsOnUnknownEncoding(): void
+    public function testStrictThrowsOnUndeclaredNonUtf8(): void
     {
         $this->expectException(ParserException::class);
 
-        new TextDecoder()->toUtf8("Caf\xE9");
+        TextDecoder::strict()->toUtf8("Caf\xE9");
+    }
+
+    public function testDetectsCyrillicEncodings(): void
+    {
+        $text = 'Привет мир, это достаточно длинный русский текст для выборки.';
+
+        self::assertSame($text, new TextDecoder()->toUtf8(\mb_convert_encoding($text, 'Windows-1251', 'UTF-8')));
+        self::assertSame($text, new TextDecoder()->toUtf8(\mb_convert_encoding($text, 'KOI8-R', 'UTF-8')));
+        self::assertSame($text, new TextDecoder()->toUtf8(\mb_convert_encoding($text, 'CP866', 'UTF-8')));
+    }
+
+    public function testDetectsLatinAndChinese(): void
+    {
+        $latin = 'Café résumé, naïve façade, plain latin text.';
+        self::assertSame($latin, new TextDecoder()->toUtf8(\mb_convert_encoding($latin, 'Windows-1252', 'UTF-8')));
+
+        $chinese = '这是一段中文测试文本，用来检验编码检测是否正确工作。';
+        self::assertSame($chinese, new TextDecoder()->toUtf8(\mb_convert_encoding($chinese, 'GB18030', 'UTF-8')));
+    }
+
+    public function testDetectRejectsBinary(): void
+    {
+        $this->expectException(ParserException::class);
+
+        new TextDecoder()->toUtf8((string) \file_get_contents(__DIR__.'/../fixtures/images/png.png'));
     }
 
     public function testFallbackEncoding(): void

@@ -129,18 +129,21 @@ EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatExcept
 
 #### Encodings
 
-All text is returned as UTF-8. Formats that declare their charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for the rest (TXT, and future HTML/Markdown) the decoder is configurable:
+All text is returned as UTF-8. Formats that declare their charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for the rest (TXT, HTML) the decoder is configurable:
 
 ```php
 use EbookReader\Text\TextDecoder;
 
-EbookReaderFactory::create('book.txt');                                        // strict (default): non-UTF-8 is rejected
-EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::detect());    // guess among candidate encodings
+EbookReaderFactory::create('book.txt');                                        // detect the charset (default)
+EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::strict());     // reject undeclared non-UTF-8
 EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::fallback('Windows-1252'));
 ```
+
+Detection picks the most plausible candidate (Cyrillic, Latin and Chinese legacy encodings, GB18030 as the CJK catch-all) and refuses binary data rather than guessing. Declare other CJK charsets (Big5, Shift_JIS, EUC-KR) explicitly via `fallback()`.
 
 ### Limitations:
 - DRM-protected books are not supported.
 - HTML: a single file only, and the table of contents is derived from the document headings (h1..h3) — HTML book layout is not standardised.
+- TXT: chapters are detected with a conservative keyword heuristic (English/Russian), and become sections and table-of-contents entries; a ZIP ("txtz") is read as all of its text files joined, with title/author/cover taken from `metadata.opf` when present.
 - AZW3 supports standalone and joint MOBI6 + KF8 files.
 - Internal `kindle:pos:` (KF8) file-position links are not converted to anchors; EPUB `@import` chains in stylesheets are not resolved.
