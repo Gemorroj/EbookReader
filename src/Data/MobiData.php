@@ -7,7 +7,7 @@ namespace EbookReader\Data;
 use EbookReader\Resource\Resource as EbookResource;
 use EbookReader\Resource\Style;
 
-final readonly class MobiData implements EbookDataInterface
+readonly class MobiData implements EbookDataInterface
 {
     /**
      * @param Style[]         $styles

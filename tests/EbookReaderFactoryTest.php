@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Tests;
 
+use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Driver\MobiDriver;
@@ -11,6 +12,7 @@ use EbookReader\Driver\TxtDriver;
 use EbookReader\EbookReaderFactory;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
+use EbookReader\Format;
 use PHPUnit\Framework\TestCase;
 
 final class EbookReaderFactoryTest extends TestCase
@@ -39,6 +41,19 @@ final class EbookReaderFactoryTest extends TestCase
     {
         $mobi = EbookReaderFactory::create(__DIR__.'/fixtures/mobi/palmodoc-cyrillic.mobi');
         self::assertInstanceOf(MobiDriver::class, $mobi);
+    }
+
+    public function testCreateAzw3(): void
+    {
+        $azw3 = EbookReaderFactory::create(__DIR__.'/fixtures/azw3/svg-cover.azw3');
+        self::assertInstanceOf(Azw3Driver::class, $azw3);
+        self::assertSame(Format::AZW3, $azw3->getFormat());
+    }
+
+    public function testCreateAzw3Joint(): void
+    {
+        $joint = EbookReaderFactory::create(__DIR__.'/fixtures/azw3/joint-mobi6-kf8.mobi');
+        self::assertInstanceOf(Azw3Driver::class, $joint);
     }
 
     public function testCreateTxt(): void

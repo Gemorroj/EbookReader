@@ -25,7 +25,7 @@ use EbookReader\TableOfContents\TableOfContents;
  * @see https://github.com/choccybiccy/mobi
  * @see https://github.com/rodzyk/readiverse
  */
-final class MobiDriver extends AbstractDriver
+class MobiDriver extends AbstractDriver
 {
     public function getFormat(): Format
     {
@@ -36,10 +36,13 @@ final class MobiDriver extends AbstractDriver
     {
         try {
             $f = new \SplFileObject($this->getFile(), 'r');
-            $this->parsePalmDb($f);
+            $palmDbData = $this->parsePalmDb($f);
             $this->parsePalmDoc($f);
             $this->parseMobiHeader($f);
             $this->parseExth($f);
+            if ($this->isKf8($f, $palmDbData)) {
+                return false;
+            }
         } catch (\Throwable $e) {
             return false;
         } finally {
@@ -160,7 +163,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * MOBI text encoding: 65001 = UTF-8, 1252 = Windows-1252, anything else falls back to Latin-1.
      */
-    private function decodeText(string $data, int $encoding): string
+    protected function decodeText(string $data, int $encoding): string
     {
         if ('' === $data || 65001 === $encoding) {
             return $data;
@@ -180,7 +183,7 @@ final class MobiDriver extends AbstractDriver
      * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
      * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      */
-    private function createDecompressor(\SplFileObject $f, array $records, array $mobiData, int $compression): DecompressorInterface
+    protected function createDecompressor(\SplFileObject $f, array $records, array $mobiData, int $compression): DecompressorInterface
     {
         return match ($compression) {
             1 => new NoCompression(),
@@ -224,7 +227,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * @param array{data_offset: int, attributes: int, unique_id: string}[] $records
      */
-    private function readRecord(\SplFileObject $f, array $records, int $index, int $fileSize): string
+    protected function readRecord(\SplFileObject $f, array $records, int $index, int $fileSize): string
     {
         if (!isset($records[$index])) {
             throw new ParserException();
@@ -244,7 +247,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * @param int[] $data
      */
-    private function getRecordExtraSize(array $data, int $flags): int
+    protected function getRecordExtraSize(array $data, int $flags): int
     {
         $pos = \count($data) - 1;
         $extra = 0;
@@ -296,7 +299,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * Reads exactly $length bytes or throws.
      */
-    private function readBytes(\SplFileObject $file, int $length): string
+    protected function readBytes(\SplFileObject $file, int $length): string
     {
         if ($length < 0) {
             throw new ParserException();
@@ -327,7 +330,7 @@ final class MobiDriver extends AbstractDriver
     /**
      * Reads a big-endian unsigned integer of $length bytes or throws.
      */
-    private function readInt(\SplFileObject $file, int $length): int
+    protected function readInt(\SplFileObject $file, int $length): int
     {
         return (int) \hexdec(\bin2hex($this->readBytes($file, $length)));
     }
@@ -470,7 +473,7 @@ final class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{authors: string[], subjects: string[], publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null}
+     * @return array{authors: string[], subjects: string[], publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, kf8_header: int|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -488,6 +491,7 @@ final class MobiDriver extends AbstractDriver
             'language' => null,
             'license' => null,
             'coveroffset' => null,
+            'kf8_header' => null,
         ];
         for ($i = 0; $i < $records; ++$i) {
             $type = $this->readInt($f, 4);
@@ -527,6 +531,10 @@ final class MobiDriver extends AbstractDriver
                 case 201: // cover offset: 4-byte big-endian, added to the first image index
                     $unpacked = \unpack('N', \substr($data, 0, 4));
                     $meta['coveroffset'] = false !== $unpacked ? $unpacked[1] : null;
+                    break;
+                case 121: // record number of the KF8 header in a joint MOBI/KF8 file
+                    $unpacked = \unpack('N', \substr($data, 0, 4));
+                    $meta['kf8_header'] = false !== $unpacked ? $unpacked[1] : null;
                     break;
             }
         }
@@ -607,11 +615,34 @@ final class MobiDriver extends AbstractDriver
         ];
     }
 
-    private function assertNotEncrypted(int $encryption): void
+    protected function assertNotEncrypted(int $encryption): void
     {
         if (0 !== $encryption) {
             throw new EncryptedBookException(\sprintf('Encrypted MOBI (encryption type %d) is not supported', $encryption));
         }
+    }
+
+    /**
+     * KF8 (AZW3) shares the MOBI container: the MOBI header version is 8 and a
+     * skeleton index (SKEL) record number is present in the extended header.
+     *
+     * @param array{records: array{data_offset: int, attributes: int, unique_id: string}[]} $palmDbData
+     */
+    protected function isKf8(\SplFileObject $f, array $palmDbData): bool
+    {
+        if (!isset($palmDbData['records'][0])) {
+            return false;
+        }
+
+        $record0 = $palmDbData['records'][0]['data_offset'];
+        $f->fseek($record0 + 36); // MOBI header version
+        if (8 !== $this->readInt($f, 4)) {
+            return false;
+        }
+
+        $f->fseek($record0 + 252); // SKEL index record number
+
+        return 0xFFFFFFFF !== $this->readInt($f, 4);
     }
 
     /**

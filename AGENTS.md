@@ -1,6 +1,6 @@
 # AGENTS.md
 
-PHP library for reading e-books (EPUB, MOBI, FB2, TXT).
+PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, TXT).
 
 ## Requirements
 

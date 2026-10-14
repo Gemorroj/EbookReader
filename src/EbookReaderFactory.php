@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader;
 
+use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\EbookDriverInterface;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
@@ -50,6 +51,7 @@ final class EbookReaderFactory
         if (false === $head) {
             return [
                 new Epub3Driver($file, $imageMimeDetector),
+                new Azw3Driver($file, $imageMimeDetector),
                 new MobiDriver($file, $imageMimeDetector),
                 new Fb2Driver($file, $imageMimeDetector),
                 new TxtDriver($file, $imageMimeDetector),
@@ -65,9 +67,10 @@ final class EbookReaderFactory
             ];
         }
 
-        // Palm Database (MOBI): 4-byte type + 4-byte creator at offset 60.
+        // Palm Database (MOBI/KF8): 4-byte type + 4-byte creator at offset 60.
         if (\strlen($head) >= 68 && 'BOOKMOBI' === \substr($head, 60, 8)) {
             return [
+                new Azw3Driver($file, $imageMimeDetector),
                 new MobiDriver($file, $imageMimeDetector),
                 new Fb2Driver($file, $imageMimeDetector),
                 new TxtDriver($file, $imageMimeDetector),
@@ -79,6 +82,7 @@ final class EbookReaderFactory
             new Fb2Driver($file, $imageMimeDetector),
             new TxtDriver($file, $imageMimeDetector),
             new MobiDriver($file, $imageMimeDetector),
+            new Azw3Driver($file, $imageMimeDetector),
         ];
     }
 }

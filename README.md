@@ -10,6 +10,7 @@
 | --- | --- | --- | --- | --- | --- |
 | EPUB | 2 and 3 | yes | yes | yes | HTML fragments + styles |
 | MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | yes | yes | HTML |
+| AZW3 | standalone and joint KF8 (Kindle Format 8) | yes | yes | yes | HTML (CSS/SVG inlined) |
 | FB2 | 2.x, plain or ZIP | yes | yes | yes | HTML fragments |
 | TXT | plain or ZIP | ZIP only | no | no | plain text |
 
@@ -76,4 +77,4 @@ var_dump($driver->isValid());             // false
 
 ### Limitations:
 - DRM-protected books are not supported.
-- `getText()` returns the book markup as-is; it is usually HTML but TXT books may be plain text.
+- `getText()` returns the markup as-is; TXT books may be plain text.
