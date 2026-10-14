@@ -229,6 +229,308 @@ final class Epub3DriverTest extends TestCase
         self::assertSame('text/css', $styles[0]->getMime());
     }
 
+    public function testMalformedContainerIsRejected(): void
+    {
+        $file = self::makeEpub(['META-INF/container.xml' => '<<<not xml>>>']);
+
+        try {
+            $driver = new Epub3Driver($file);
+            self::assertFalse($driver->isValid());
+
+            try {
+                $driver->getMeta();
+                self::fail('Malformed container.xml must not be parsed');
+            } catch (ParserException $exception) {
+                self::assertInstanceOf(\DOMException::class, $exception->getPrevious());
+            }
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testManifestHrefFragmentIsStripped(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => '<?xml version="1.0"?>'
+                .'<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+                .'<rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+            'content.opf' => '<?xml version="1.0"?>'
+                .'<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+                .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>'
+                .'<manifest><item id="c1" href="chapter.xhtml#frag" media-type="application/xhtml+xml"/></manifest>'
+                .'<spine><itemref idref="c1"/></spine></package>',
+            'chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ch</title></head>'
+                .'<body><p>Hello</p></body></html>',
+        ]);
+
+        try {
+            $sections = new Epub3Driver($file)->getSections();
+            self::assertCount(1, $sections);
+            self::assertSame('chapter.xhtml', $sections[0]->getId());
+            self::assertStringContainsString('Hello', $sections[0]->getContent());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testGetResourcesAggregatesSections(): void
+    {
+        $resources = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-nav.epub')->getResources();
+
+        self::assertNotEmpty($resources);
+
+        $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $resources);
+        self::assertSame($paths, \array_values(\array_unique($paths)));
+    }
+
+    /**
+     * Builds a ZIP (an EPUB) from entry name => content in a temporary file.
+     *
+     * @param array<string, string> $entries
+     */
+    private static function makeEpub(array $entries): string
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'epub');
+        self::assertNotFalse($file);
+
+        $zip = new \ZipArchive();
+        self::assertTrue($zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE));
+        foreach ($entries as $name => $content) {
+            $zip->addFromString($name, $content);
+        }
+        $zip->close();
+
+        return $file;
+    }
+
+    public function testParentDirectoryAndUnresolvedReferences(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('EPUB/content.opf'),
+            'EPUB/content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="pic" href="images/pic.png" media-type="image/png"/>'
+                .'<item id="css" href="css/style.css" media-type="text/css"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'EPUB/text/chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                .'<link rel="stylesheet" href="../css/style.css"/></head><body>'
+                .'<img src="../images/pic.png"/><a href="../text/missing.xhtml">gone</a></body></html>',
+            'EPUB/css/style.css' => '.a{background:url(../images/pic.png)}'
+                .'.b{background:url(data:image/png;base64,AAAA)}'
+                .'.c{background:url(../images/nope.png)}',
+            'EPUB/images/pic.png' => 'PNG',
+        ]);
+
+        try {
+            $sections = new Epub3Driver($file)->getSections();
+            self::assertCount(1, $sections);
+
+            $content = $sections[0]->getContent();
+            self::assertStringContainsString('EPUB/images/pic.png', $content);    // ../ resolved
+            self::assertStringContainsString('EPUB/css/style.css', $content);
+            self::assertStringContainsString('../text/missing.xhtml', $content); // unknown kept
+
+            $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $sections[0]->getResources());
+            self::assertContains('EPUB/images/pic.png', $paths);
+            self::assertContains('EPUB/css/style.css', $paths);
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testNavigationWithNamespacedTypeAndSpecialLinks(): void
+    {
+        $nav = '<?xml version="1.0"?>'
+            .'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:ops="http://www.idpf.org/2007/ops">'
+            .'<head><title>Nav</title></head><body>'
+            .'<nav ops:type="toc"><ol>'
+            .'<li><a href="text/chapter.xhtml">Chapter</a></li>'
+            .'<li><a href="#top">Fragment only</a></li>'
+            .'<li><a href="#">Empty</a></li>'
+            .'<li><a href="https://example.com">External</a></li>'
+            .'</ol></nav></body></html>';
+
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+                .'<item id="ch" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'nav.xhtml' => $nav,
+            'text/chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $toc = new Epub3Driver($file)->getTableOfContents();
+            self::assertCount(4, $toc);
+
+            self::assertSame('Chapter', $toc[0]->getTitle());
+            self::assertSame(0, $toc[0]->getSectionIndex());
+
+            self::assertSame('Fragment only', $toc[1]->getTitle());
+            self::assertSame('top', $toc[1]->getAnchor());
+            self::assertNull($toc[1]->getSectionIndex());
+
+            self::assertSame('Empty', $toc[2]->getTitle());
+            self::assertNull($toc[2]->getAnchor());
+
+            self::assertSame('External', $toc[3]->getTitle());
+            self::assertNull($toc[3]->getSectionIndex());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testIsbnIdentifiers(): void
+    {
+        $v3 = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>',
+                '<dc:title>T</dc:title><dc:identifier>urn:isbn:9781234567890</dc:identifier>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+        $v2 = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '2.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>',
+                '<dc:title>T</dc:title><dc:identifier opf:scheme="ISBN">9781234567890</dc:identifier>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            self::assertSame('9781234567890', new Epub3Driver($v3)->getMeta()->getIsbn());
+            self::assertSame('9781234567890', new Epub3Driver($v2)->getMeta()->getIsbn());
+        } finally {
+            \unlink($v3);
+            \unlink($v2);
+        }
+    }
+
+    public function testUnparsablePublishDate(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>',
+                '<dc:title>T</dc:title><dc:date>not-a-date</dc:date>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            self::assertTrue(new Epub3Driver($file)->getMeta()->getPublishDate()->isEmpty());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testTableOfContentsFallsBackFromBrokenNavToNcx(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+                .'<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+                .'<item id="ch" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'nav.xhtml' => '<<<broken xml',
+            'toc.ncx' => self::ncx('Chapter', 'text/chapter.xhtml'),
+            'text/chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $toc = new Epub3Driver($file)->getTableOfContents();
+            self::assertCount(1, $toc);
+            self::assertSame('Chapter', $toc[0]->getTitle());
+            self::assertSame(0, $toc[0]->getSectionIndex());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testTableOfContentsSkipsMissingNavToNcx(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="nav" href="absent-nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+                .'<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+                .'<item id="ch" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'toc.ncx' => self::ncx('Chapter', 'text/chapter.xhtml'),
+            'text/chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $toc = new Epub3Driver($file)->getTableOfContents();
+            self::assertCount(1, $toc);
+            self::assertSame('Chapter', $toc[0]->getTitle());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testTableOfContentsWithoutNavigation(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            self::assertSame([], new Epub3Driver($file)->getTableOfContents());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    private static function containerXml(string $opfPath): string
+    {
+        return '<?xml version="1.0"?>'
+            .'<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+            .'<rootfiles><rootfile full-path="'.$opfPath.'" media-type="application/oebps-package+xml"/></rootfiles>'
+            .'</container>';
+    }
+
+    private static function packageXml(string $version, string $manifest, string $spine, string $metadata = '<dc:title>T</dc:title>'): string
+    {
+        return '<?xml version="1.0"?>'
+            .'<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="'.$version.'">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'.$metadata.'</metadata>'
+            .'<manifest>'.$manifest.'</manifest>'
+            .'<spine>'.$spine.'</spine></package>';
+    }
+
+    private static function ncx(string $title, string $src): string
+    {
+        return '<?xml version="1.0"?>'
+            .'<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><navMap>'
+            .'<navPoint id="n1"><navLabel><text>'.$title.'</text></navLabel>'
+            .'<content src="'.$src.'"/></navPoint></navMap></ncx>';
+    }
+
     public static function filesProviderFake(): \Generator
     {
         yield [__DIR__.'/../fixtures/fake.xml'];

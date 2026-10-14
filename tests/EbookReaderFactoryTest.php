@@ -118,6 +118,34 @@ final class EbookReaderFactoryTest extends TestCase
         EbookReaderFactory::create(__DIR__.'/fixtures/fake.zip');
     }
 
+    public function testCreateRejectsPalmDocContainer(): void
+    {
+        // A Palm database (TEXtREAd) whose payload embeds an HTML document must
+        // not be mistaken for HTML, TXT or MOBI: it is simply unsupported.
+        $file = \tempnam(\sys_get_temp_dir(), 'pdb');
+        self::assertNotFalse($file);
+        \file_put_contents($file, self::emptyPalmDatabase().'<html><body>hi</body></html>'."\xFF");
+
+        try {
+            $this->expectException(UnsupportedFormatException::class);
+            EbookReaderFactory::create($file);
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    /**
+     * A 78-byte Palm Database header with type + creator "TEXtREAd" and no records.
+     */
+    private static function emptyPalmDatabase(): string
+    {
+        return \str_pad('PalmDoc', 32, "\x00") // database name
+            ."\x00\x00\x00\x00"                // attributes, version
+            .\str_repeat("\x00", 24)           // dates, appInfoID, sortInfoID
+            .'TEXtREAd'                        // type + creator (offset 60)
+            .\str_repeat("\x00", 10);          // uniqueIDSeed, nextRecordListID, numRecords
+    }
+
     public function testCreateNotReadable(): void
     {
         $this->expectException(FileNotReadableException::class);

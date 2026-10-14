@@ -38,6 +38,27 @@ final class TextDecoderTest extends TestCase
         self::assertSame('Hi', new TextDecoder()->toUtf8("\xFF\xFE".$utf16));
     }
 
+    public function testUtf16BeBomIsDecoded(): void
+    {
+        $utf16 = \mb_convert_encoding('Hi', 'UTF-16BE', 'UTF-8');
+
+        self::assertSame('Hi', new TextDecoder()->toUtf8("\xFE\xFF".$utf16));
+    }
+
+    public function testUtf32LeBomIsDecoded(): void
+    {
+        $utf32 = \mb_convert_encoding('Hi', 'UTF-32LE', 'UTF-8');
+
+        self::assertSame('Hi', new TextDecoder()->toUtf8("\xFF\xFE\x00\x00".$utf32));
+    }
+
+    public function testUtf32BeBomIsDecoded(): void
+    {
+        $utf32 = \mb_convert_encoding('Hi', 'UTF-32BE', 'UTF-8');
+
+        self::assertSame('Hi', new TextDecoder()->toUtf8("\x00\x00\xFE\xFF".$utf32));
+    }
+
     public function testStrictThrowsOnUnknownEncoding(): void
     {
         $this->expectException(ParserException::class);

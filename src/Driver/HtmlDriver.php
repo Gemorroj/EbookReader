@@ -30,8 +30,18 @@ final class HtmlDriver extends AbstractDriver
     public function isValid(): bool
     {
         $head = @\file_get_contents($this->getFile(), false, null, 0, 1024);
+        if (false === $head) {
+            return false;
+        }
 
-        return false !== $head && 1 === \preg_match('~<!doctype\s+html|<html[\s>]~i', $head);
+        // The file itself must be the HTML document: skip a BOM, an optional XML
+        // prolog, leading comments and whitespace, then require a doctype or
+        // <html> tag. This rejects containers (e.g. PalmDOC) that only embed HTML
+        // further in.
+        $head = \preg_replace('~^\xEF\xBB\xBF~', '', $head) ?? $head;
+        $head = \preg_replace('~^(?:<\?xml.*?\?>|<!--.*?-->|\s)+~is', '', $head) ?? $head;
+
+        return 1 === \preg_match('~^(?:<!doctype\s+html|<html[\s>])~i', $head);
     }
 
     /**

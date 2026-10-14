@@ -31,7 +31,7 @@ final class Epub3Driver extends AbstractDriver
      */
     private const array ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
 
-    private ?\DOMElement $packageNode = null;
+    private ?\Dom\Element $packageNode = null;
     private ?string $packageDirectory = null;
 
     #[\Override]
@@ -52,13 +52,33 @@ final class Epub3Driver extends AbstractDriver
         return true;
     }
 
-    private function getPackageNode(): \DOMElement
+    private function getPackageNode(): \Dom\Element
     {
         if (null === $this->packageNode || null === $this->packageDirectory) {
             [$this->packageNode, $this->packageDirectory] = $this->parsePackage();
         }
 
         return $this->packageNode;
+    }
+
+    /**
+     * Reads an attribute as a string, treating a missing attribute as "".
+     */
+    private static function attribute(\Dom\Element $element, string $name): string
+    {
+        return $element->getAttribute($name) ?? '';
+    }
+
+    /**
+     * @throws ParserException
+     */
+    private function parseXml(string $content): \Dom\XMLDocument
+    {
+        try {
+            return \Dom\XMLDocument::createFromString($content, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        } catch (\DOMException $e) {
+            throw new ParserException(previous: $e);
+        }
     }
 
     /**
@@ -95,23 +115,22 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return array<string, array{href: string, mediaType: string, path: string, properties: string}>
+     * @return array<string, array{mediaType: string, path: string, properties: string}>
      */
-    private function manifestMap(\DOMElement $manifestNode): array
+    private function manifestMap(\Dom\Element $manifestNode): array
     {
         $manifest = [];
-        /** @var \DOMElement $item */
-        foreach ($manifestNode->getElementsByTagName('item') as $item) {
-            $id = $item->getAttribute('id');
+        /** @var \Dom\Element $item */
+        foreach ($manifestNode->getElementsByTagNameNS('*', 'item') as $item) {
+            $id = self::attribute($item, 'id');
             if ('' === $id) {
                 continue;
             }
 
             $manifest[$id] = [
-                'href' => $item->getAttribute('href'),
-                'mediaType' => $item->getAttribute('media-type'),
-                'path' => $this->resolveZipPath($item->getAttribute('href')),
-                'properties' => $item->getAttribute('properties'),
+                'mediaType' => self::attribute($item, 'media-type'),
+                'path' => $this->resolveZipPath(self::attribute($item, 'href')),
+                'properties' => self::attribute($item, 'properties'),
             ];
         }
 
@@ -122,7 +141,7 @@ final class Epub3Driver extends AbstractDriver
      * Builds the book asset map (images, fonts, stylesheets, media) keyed by
      * their canonical ZIP path, rewriting references inside stylesheets.
      *
-     * @param array<string, array{href: string, mediaType: string, path: string, properties: string}> $manifest
+     * @param array<string, array{mediaType: string, path: string, properties: string}> $manifest
      *
      * @return array{0: array<string, EbookResource>, 1: array<string, string[]>}
      */
@@ -151,7 +170,7 @@ final class Epub3Driver extends AbstractDriver
                 $styleReferences[$path] = \array_keys($references);
             }
 
-            $mime = '' !== $item['mediaType'] ? $item['mediaType'] : ($this->getMimeDetector()->detect($content) ?? '');
+            $mime = $item['mediaType'];
             $assets[$path] = new EbookResource($path, $content, $mime);
         }
 
@@ -166,14 +185,14 @@ final class Epub3Driver extends AbstractDriver
      *
      * @return array<string, true>
      */
-    private function rewriteReferences(\DOMDocument $dom, string $baseDir, array $knownPaths): array
+    private function rewriteReferences(\Dom\XMLDocument $dom, string $baseDir, array $knownPaths): array
     {
         $referenced = [];
-        /** @var \DOMElement $node */
-        foreach ($dom->getElementsByTagName('*') as $node) {
+        /** @var \Dom\Element $node */
+        foreach ($dom->getElementsByTagNameNS('*', '*') as $node) {
             $isAsset = \in_array(\strtolower($node->localName ?? $node->nodeName), self::ASSET_TAGS, true);
 
-            /** @var \DOMAttr $attribute */
+            /** @var \Dom\Attr $attribute */
             foreach ($node->attributes as $attribute) {
                 if (!\in_array(\strtolower($attribute->localName), self::REFERENCE_ATTRIBUTES, true)) {
                     continue;
@@ -264,18 +283,18 @@ final class Epub3Driver extends AbstractDriver
     public function getSections(): array
     {
         $packageNode = $this->getPackageNode();
-        $version = (int) $packageNode->getAttribute('version');
+        $version = (int) self::attribute($packageNode, 'version');
 
-        /** @var \DOMElement|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagName('manifest')->item(0);
-        if (!$manifestNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $manifestNode */
+        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        if (!$manifestNode instanceof \Dom\Element) {
             throw new ParserException();
         }
         $manifest = $this->manifestMap($manifestNode);
 
-        /** @var \DOMElement|null $spineNode */
-        $spineNode = $packageNode->getElementsByTagName('spine')->item(0);
-        if (!$spineNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $spineNode */
+        $spineNode = $packageNode->getElementsByTagNameNS('*', 'spine')->item(0);
+        if (!$spineNode instanceof \Dom\Element) {
             throw new ParserException();
         }
 
@@ -293,9 +312,9 @@ final class Epub3Driver extends AbstractDriver
             }
 
             $data = [];
-            /** @var \DOMElement $spinItemNode */
-            foreach ($spineNode->getElementsByTagName('itemref') as $spinItemNode) {
-                $id = $spinItemNode->getAttribute('idref');
+            /** @var \Dom\Element $spinItemNode */
+            foreach ($spineNode->getElementsByTagNameNS('*', 'itemref') as $spinItemNode) {
+                $id = self::attribute($spinItemNode, 'idref');
                 if (!isset($manifest[$id])) {
                     throw new ParserException();
                 }
@@ -307,10 +326,7 @@ final class Epub3Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                $domFile = new \DOMDocument('1.0', 'UTF-8');
-                if (false === $domFile->loadXML($content, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS)) {
-                    throw new ParserException();
-                }
+                $domFile = $this->parseXml($content);
 
                 $isNavigation = 2 === $version ? null : false;
                 $properties = \preg_split('/\s+/', $item['properties'], -1, \PREG_SPLIT_NO_EMPTY);
@@ -332,8 +348,8 @@ final class Epub3Driver extends AbstractDriver
                     }
                 }
 
-                $title = $domFile->getElementsByTagName('title')->item(0)?->textContent;
-                $text = $domFile->saveXML($domFile->documentElement);
+                $title = $domFile->getElementsByTagNameNS('*', 'title')->item(0)?->textContent;
+                $text = $domFile->saveXml($domFile->documentElement);
                 if (false === $text) {
                     throw new ParserException();
                 }
@@ -353,36 +369,36 @@ final class Epub3Driver extends AbstractDriver
         // https://wiki.mobileread.com/wiki/Ebook_Covers
 
         $packageNode = $this->getPackageNode();
-        /** @var \DOMElement|null $metadataNode */
-        $metadataNode = $packageNode->getElementsByTagName('metadata')->item(0);
-        if (!$metadataNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $metadataNode */
+        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        if (!$metadataNode instanceof \Dom\Element) {
             return null;
         }
-        $metaNodeList = $metadataNode->getElementsByTagName('meta');
+        $metaNodeList = $metadataNode->getElementsByTagNameNS('*', 'meta');
 
         $manifestId = null;
-        /** @var \DOMElement $metaNode */
+        /** @var \Dom\Element $metaNode */
         foreach ($metaNodeList as $metaNode) {
-            $name = $metaNode->getAttribute('name');
+            $name = self::attribute($metaNode, 'name');
             if ('cover' === $name) {
-                $manifestId = $metaNode->getAttribute('content');
+                $manifestId = self::attribute($metaNode, 'content');
                 break;
             }
         }
 
-        /** @var \DOMElement[] $potentialCoverNodes */
+        /** @var \Dom\Element[] $potentialCoverNodes */
         $potentialCoverNodes = [];
-        /** @var \DOMElement|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagName('manifest')->item(0);
-        if (!$manifestNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $manifestNode */
+        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        if (!$manifestNode instanceof \Dom\Element) {
             return null;
         }
-        $manifestItemsNode = $manifestNode->getElementsByTagName('item');
-        /** @var \DOMElement $manifestItemNode */
+        $manifestItemsNode = $manifestNode->getElementsByTagNameNS('*', 'item');
+        /** @var \Dom\Element $manifestItemNode */
         foreach ($manifestItemsNode as $manifestItemNode) {
-            if ($manifestId && $manifestId === $manifestItemNode->getAttribute('id') && \str_starts_with($manifestItemNode->getAttribute('media-type'), 'image/')) {
+            if ($manifestId && $manifestId === self::attribute($manifestItemNode, 'id') && \str_starts_with(self::attribute($manifestItemNode, 'media-type'), 'image/')) {
                 \array_unshift($potentialCoverNodes, $manifestItemNode);
-            } elseif (\in_array($manifestItemNode->getAttribute('id'), ['cover', 'cover-image', 'cover-img'], true) && \str_starts_with($manifestItemNode->getAttribute('media-type'), 'image/')) {
+            } elseif (\in_array(self::attribute($manifestItemNode, 'id'), ['cover', 'cover-image', 'cover-img'], true) && \str_starts_with(self::attribute($manifestItemNode, 'media-type'), 'image/')) {
                 $potentialCoverNodes[] = $manifestItemNode;
             }
         }
@@ -392,8 +408,8 @@ final class Epub3Driver extends AbstractDriver
             return null;
         }
 
-        $mime = $potentialCoverNode->getAttribute('media-type');
-        $zipFilePath = $this->resolveZipPath($potentialCoverNode->getAttribute('href'));
+        $mime = self::attribute($potentialCoverNode, 'media-type');
+        $zipFilePath = $this->resolveZipPath(self::attribute($potentialCoverNode, 'href'));
 
         $zip = new \ZipArchive();
         $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
@@ -410,10 +426,6 @@ final class Epub3Driver extends AbstractDriver
             $zip->close();
         }
 
-        if ('' === $mime) {
-            $mime = $this->getMimeDetector()->detect($content) ?? '';
-        }
-
         return new Cover($content, $mime);
     }
 
@@ -424,24 +436,24 @@ final class Epub3Driver extends AbstractDriver
     public function getTableOfContents(): array
     {
         $packageNode = $this->getPackageNode();
-        /** @var \DOMElement|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagName('manifest')->item(0);
-        if (!$manifestNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $manifestNode */
+        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        if (!$manifestNode instanceof \Dom\Element) {
             return [];
         }
 
         $navHref = null;
         $ncxHref = null;
-        /** @var \DOMElement $item */
-        foreach ($manifestNode->getElementsByTagName('item') as $item) {
+        /** @var \Dom\Element $item */
+        foreach ($manifestNode->getElementsByTagNameNS('*', 'item') as $item) {
             if (null === $navHref) {
-                $properties = \preg_split('/\s+/', $item->getAttribute('properties'), -1, \PREG_SPLIT_NO_EMPTY);
+                $properties = \preg_split('/\s+/', self::attribute($item, 'properties'), -1, \PREG_SPLIT_NO_EMPTY);
                 if ($properties && \in_array('nav', $properties, true)) {
-                    $navHref = $item->getAttribute('href');
+                    $navHref = self::attribute($item, 'href');
                 }
             }
-            if (null === $ncxHref && 'application/x-dtbncx+xml' === $item->getAttribute('media-type')) {
-                $ncxHref = $item->getAttribute('href');
+            if (null === $ncxHref && 'application/x-dtbncx+xml' === self::attribute($item, 'media-type')) {
+                $ncxHref = self::attribute($item, 'href');
             }
         }
 
@@ -462,8 +474,9 @@ final class Epub3Driver extends AbstractDriver
                 if (false === $content) {
                     continue;
                 }
-                $dom = new \DOMDocument('1.0', 'UTF-8');
-                if (false === @$dom->loadXML($content, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS)) {
+                try {
+                    $dom = $this->parseXml($content);
+                } catch (ParserException) {
                     continue;
                 }
 
@@ -487,16 +500,16 @@ final class Epub3Driver extends AbstractDriver
      *
      * @return TableOfContents[]
      */
-    private function parseNav(\DOMDocument $dom, string $baseDir, array $spineMap): array
+    private function parseNav(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
         $nav = null;
         $fallback = null;
-        /** @var \DOMElement $navNode */
-        foreach ($dom->getElementsByTagName('nav') as $navNode) {
+        /** @var \Dom\Element $navNode */
+        foreach ($dom->getElementsByTagNameNS('*', 'nav') as $navNode) {
             $fallback ??= $navNode;
-            $type = $navNode->getAttribute('epub:type');
+            $type = self::attribute($navNode, 'epub:type');
             if ('' === $type) {
-                $type = $navNode->getAttributeNS('http://www.idpf.org/2007/ops', 'type');
+                $type = $navNode->getAttributeNS('http://www.idpf.org/2007/ops', 'type') ?? '';
             }
             if ('' !== $type && \str_contains($type, 'toc')) {
                 $nav = $navNode;
@@ -508,10 +521,10 @@ final class Epub3Driver extends AbstractDriver
             return [];
         }
 
-        /** @var \DOMElement|null $ol */
+        /** @var \Dom\Element|null $ol */
         $ol = null;
         foreach ($nav->childNodes as $child) {
-            if ($child instanceof \DOMElement && 'ol' === $child->localName) {
+            if ($child instanceof \Dom\Element && 'ol' === $child->localName) {
                 $ol = $child;
                 break;
             }
@@ -530,18 +543,18 @@ final class Epub3Driver extends AbstractDriver
      * @param TableOfContents[]  $entries
      * @param array<string, int> $spineMap
      */
-    private function walkOl(\DOMElement $ol, int $level, array &$entries, string $baseDir, array $spineMap): void
+    private function walkOl(\Dom\Element $ol, int $level, array &$entries, string $baseDir, array $spineMap): void
     {
         foreach ($ol->childNodes as $li) {
-            if (!$li instanceof \DOMElement || 'li' !== $li->localName) {
+            if (!$li instanceof \Dom\Element || 'li' !== $li->localName) {
                 continue;
             }
 
             foreach ($li->childNodes as $child) {
-                if ($child instanceof \DOMElement && 'a' === $child->localName) {
+                if ($child instanceof \Dom\Element && 'a' === $child->localName) {
                     $title = \mb_trim($child->textContent);
                     if ('' !== $title) {
-                        [$sectionIndex, $anchor] = $this->resolveTarget($child->getAttribute('href'), $baseDir, $spineMap);
+                        [$sectionIndex, $anchor] = $this->resolveTarget(self::attribute($child, 'href'), $baseDir, $spineMap);
                         $entries[] = new TableOfContents($title, $level, $sectionIndex, $anchor);
                     }
                     break;
@@ -549,7 +562,7 @@ final class Epub3Driver extends AbstractDriver
             }
 
             foreach ($li->childNodes as $child) {
-                if ($child instanceof \DOMElement && 'ol' === $child->localName) {
+                if ($child instanceof \Dom\Element && 'ol' === $child->localName) {
                     $this->walkOl($child, $level + 1, $entries, $baseDir, $spineMap);
                 }
             }
@@ -561,11 +574,11 @@ final class Epub3Driver extends AbstractDriver
      *
      * @return TableOfContents[]
      */
-    private function parseNcx(\DOMDocument $dom, string $baseDir, array $spineMap): array
+    private function parseNcx(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
-        /** @var \DOMElement|null $navMap */
-        $navMap = $dom->getElementsByTagName('navMap')->item(0);
-        if (!$navMap instanceof \DOMElement) {
+        /** @var \Dom\Element|null $navMap */
+        $navMap = $dom->getElementsByTagNameNS('*', 'navMap')->item(0);
+        if (!$navMap instanceof \Dom\Element) {
             return [];
         }
 
@@ -579,17 +592,17 @@ final class Epub3Driver extends AbstractDriver
      * @param TableOfContents[]  $entries
      * @param array<string, int> $spineMap
      */
-    private function walkNavPoints(\DOMElement $parent, int $level, array &$entries, string $baseDir, array $spineMap): void
+    private function walkNavPoints(\Dom\Element $parent, int $level, array &$entries, string $baseDir, array $spineMap): void
     {
         foreach ($parent->childNodes as $navPoint) {
-            if (!$navPoint instanceof \DOMElement || 'navPoint' !== $navPoint->localName) {
+            if (!$navPoint instanceof \Dom\Element || 'navPoint' !== $navPoint->localName) {
                 continue;
             }
 
-            $text = $navPoint->getElementsByTagName('text')->item(0)?->textContent;
+            $text = $navPoint->getElementsByTagNameNS('*', 'text')->item(0)?->textContent;
             $title = null === $text ? '' : \mb_trim($text);
             if ('' !== $title) {
-                $src = $navPoint->getElementsByTagName('content')->item(0)?->getAttribute('src');
+                $src = $navPoint->getElementsByTagNameNS('*', 'content')->item(0)?->getAttribute('src');
                 [$sectionIndex, $anchor] = null === $src ? [null, null] : $this->resolveTarget($src, $baseDir, $spineMap);
                 $entries[] = new TableOfContents($title, $level, $sectionIndex, $anchor);
             }
@@ -606,25 +619,25 @@ final class Epub3Driver extends AbstractDriver
     private function spineIndexMap(): array
     {
         $packageNode = $this->getPackageNode();
-        /** @var \DOMElement|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagName('manifest')->item(0);
-        /** @var \DOMElement|null $spineNode */
-        $spineNode = $packageNode->getElementsByTagName('spine')->item(0);
-        if (!$manifestNode instanceof \DOMElement || !$spineNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $manifestNode */
+        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        /** @var \Dom\Element|null $spineNode */
+        $spineNode = $packageNode->getElementsByTagNameNS('*', 'spine')->item(0);
+        if (!$manifestNode instanceof \Dom\Element || !$spineNode instanceof \Dom\Element) {
             return [];
         }
 
         $hrefs = [];
-        /** @var \DOMElement $item */
-        foreach ($manifestNode->getElementsByTagName('item') as $item) {
-            $hrefs[$item->getAttribute('id')] = $item->getAttribute('href');
+        /** @var \Dom\Element $item */
+        foreach ($manifestNode->getElementsByTagNameNS('*', 'item') as $item) {
+            $hrefs[self::attribute($item, 'id')] = self::attribute($item, 'href');
         }
 
         $map = [];
         $index = 0;
-        /** @var \DOMElement $itemref */
-        foreach ($spineNode->getElementsByTagName('itemref') as $itemref) {
-            $id = $itemref->getAttribute('idref');
+        /** @var \Dom\Element $itemref */
+        foreach ($spineNode->getElementsByTagNameNS('*', 'itemref') as $itemref) {
+            $id = self::attribute($itemref, 'idref');
             if (isset($hrefs[$id])) {
                 $map[$this->resolveZipPath($hrefs[$id])] = $index;
             }
@@ -667,13 +680,13 @@ final class Epub3Driver extends AbstractDriver
     {
         $packageNode = $this->getPackageNode();
 
-        $version = (int) $packageNode->getAttribute('version');
+        $version = (int) self::attribute($packageNode, 'version');
         if (!\in_array($version, [2, 3], true)) {
             throw new UnsupportedFormatException();
         }
-        /** @var \DOMElement|null $metadataNode */
-        $metadataNode = $packageNode->getElementsByTagName('metadata')->item(0);
-        if (!$metadataNode instanceof \DOMElement) {
+        /** @var \Dom\Element|null $metadataNode */
+        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        if (!$metadataNode instanceof \Dom\Element) {
             throw new ParserException();
         }
 
@@ -703,12 +716,12 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @return string[]
      */
-    protected function makeSubjects(\DOMElement $metadataNode): array
+    protected function makeSubjects(\Dom\Element $metadataNode): array
     {
         $subjects = [];
-        /** @var \DOMElement $subjectNode */
-        foreach ($metadataNode->getElementsByTagName('subject') as $subjectNode) {
-            $value = \mb_trim($subjectNode->nodeValue);
+        /** @var \Dom\Element $subjectNode */
+        foreach ($metadataNode->getElementsByTagNameNS('*', 'subject') as $subjectNode) {
+            $value = \mb_trim($subjectNode->textContent);
             if ('' !== $value) {
                 $subjects[] = $value;
             }
@@ -720,19 +733,19 @@ final class Epub3Driver extends AbstractDriver
     /**
      * dc:date per W3CDTF/ISO 8601: YYYY, YYYY-MM, YYYY-MM-DD or full date-time.
      */
-    protected function makePublishDate(\DOMElement $metadataNode): PublishDate
+    protected function makePublishDate(\Dom\Element $metadataNode): PublishDate
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcdate
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.7
 
-        /** @var \DOMElement|null $dateNode */
-        $dateNode = $metadataNode->getElementsByTagName('date')->item(0);
+        /** @var \Dom\Element|null $dateNode */
+        $dateNode = $metadataNode->getElementsByTagNameNS('*', 'date')->item(0);
 
         if (!$dateNode) {
             return new PublishDate();
         }
 
-        $dateStr = \trim($dateNode->nodeValue);
+        $dateStr = \trim($dateNode->textContent);
         if ('' === $dateStr) {
             return new PublishDate();
         }
@@ -754,68 +767,68 @@ final class Epub3Driver extends AbstractDriver
         return new PublishDate((int) $obj->format('Y'), (int) $obj->format('m'), (int) $obj->format('d'));
     }
 
-    protected function makeLicense(\DOMElement $metadataNode): ?string
+    protected function makeLicense(\Dom\Element $metadataNode): ?string
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.15
 
-        /** @var \DomElement|null $rightsNode */
-        $rightsNode = $metadataNode->getElementsByTagName('rights')->item(0);
+        /** @var \Dom\Element|null $rightsNode */
+        $rightsNode = $metadataNode->getElementsByTagNameNS('*', 'rights')->item(0);
 
         if ($rightsNode) {
-            return $rightsNode->nodeValue;
+            return $rightsNode->textContent;
         }
 
         return null;
     }
 
-    protected function makeLanguage(\DOMElement $metadataNode): ?string
+    protected function makeLanguage(\Dom\Element $metadataNode): ?string
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dclanguage
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.12
 
-        /** @var \DOMElement|null $languageNode */
-        $languageNode = $metadataNode->getElementsByTagName('language')->item(0);
+        /** @var \Dom\Element|null $languageNode */
+        $languageNode = $metadataNode->getElementsByTagNameNS('*', 'language')->item(0);
 
-        return $languageNode?->nodeValue;
+        return $languageNode?->textContent;
     }
 
-    protected function makeDescription(\DOMElement $metadataNode): ?string
+    protected function makeDescription(\Dom\Element $metadataNode): ?string
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.4
 
-        /** @var \DomElement|null $descriptionNode */
-        $descriptionNode = $metadataNode->getElementsByTagName('description')->item(0);
+        /** @var \Dom\Element|null $descriptionNode */
+        $descriptionNode = $metadataNode->getElementsByTagNameNS('*', 'description')->item(0);
 
         if ($descriptionNode) {
-            return \mb_trim($descriptionNode->nodeValue);
+            return \mb_trim($descriptionNode->textContent);
         }
 
         return null;
     }
 
-    protected function makeIsbn(\DOMElement $metadataNode, int $version): ?string
+    protected function makeIsbn(\Dom\Element $metadataNode, int $version): ?string
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcidentifier
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.10
 
-        $identifierNodeList = $metadataNode->getElementsByTagName('identifier');
+        $identifierNodeList = $metadataNode->getElementsByTagNameNS('*', 'identifier');
 
         if (3 === $version) {
-            /** @var \DOMElement $identifierNode */
+            /** @var \Dom\Element $identifierNode */
             foreach ($identifierNodeList as $identifierNode) {
-                $identifier = $identifierNode->nodeValue;
+                $identifier = $identifierNode->textContent;
                 if (\str_starts_with($identifier, 'urn:isbn:')) {
                     return \substr($identifier, 9);
                 }
             }
         } elseif (2 === $version) {
-            /** @var \DOMElement $identifierNode */
+            /** @var \Dom\Element $identifierNode */
             foreach ($identifierNodeList as $identifierNode) {
-                $scheme = $identifierNode->getAttribute('opf:scheme');
+                $scheme = self::attribute($identifierNode, 'opf:scheme');
                 if ('ISBN' === $scheme) {
-                    return $identifierNode->nodeValue;
+                    return $identifierNode->textContent;
                 }
             }
         }
@@ -823,32 +836,32 @@ final class Epub3Driver extends AbstractDriver
         return null;
     }
 
-    protected function makePublisher(\DOMElement $metadataNode): ?string
+    protected function makePublisher(\Dom\Element $metadataNode): ?string
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.5
 
-        /** @var \DOMElement|null $publisherNode */
-        $publisherNode = $metadataNode->getElementsByTagName('publisher')->item(0);
+        /** @var \Dom\Element|null $publisherNode */
+        $publisherNode = $metadataNode->getElementsByTagNameNS('*', 'publisher')->item(0);
 
         if ($publisherNode) {
-            return $publisherNode->nodeValue;
+            return $publisherNode->textContent;
         }
 
         return null;
     }
 
-    protected function makeTitle(\DOMElement $metadataNode): string
+    protected function makeTitle(\Dom\Element $metadataNode): string
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dctitle
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.1
 
-        $titleNodeList = $metadataNode->getElementsByTagName('title');
+        $titleNodeList = $metadataNode->getElementsByTagNameNS('*', 'title');
 
         $titles = [];
-        /** @var \DOMElement $titleNode */
+        /** @var \Dom\Element $titleNode */
         foreach ($titleNodeList as $titleNode) {
-            $titles[] = $titleNode->nodeValue;
+            $titles[] = $titleNode->textContent;
         }
 
         return \implode(', ', $titles);
@@ -857,17 +870,17 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @return string[]
      */
-    protected function makeAuthors(\DOMElement $metadataNode): array
+    protected function makeAuthors(\Dom\Element $metadataNode): array
     {
         // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dccreator
         // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.2
 
         $authors = $allAuthors = [];
-        /** @var \DOMElement $creatorNode */
-        foreach ($metadataNode->getElementsByTagName('creator') as $creatorNode) {
-            $allAuthors[] = $creatorNode->nodeValue;
-            if ('aut' === $creatorNode->getAttribute('opf:role')) {
-                $authors[] = $creatorNode->nodeValue;
+        /** @var \Dom\Element $creatorNode */
+        foreach ($metadataNode->getElementsByTagNameNS('*', 'creator') as $creatorNode) {
+            $allAuthors[] = $creatorNode->textContent;
+            if ('aut' === self::attribute($creatorNode, 'opf:role')) {
+                $authors[] = $creatorNode->textContent;
             }
         }
 
@@ -875,7 +888,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return array{0: \DOMElement, 1: string}
+     * @return array{0: \Dom\Element, 1: string}
      */
     private function parsePackage(): array
     {
@@ -891,17 +904,14 @@ final class Epub3Driver extends AbstractDriver
                 throw new ParserException();
             }
 
-            $domContainer = new \DOMDocument('1.0', 'UTF-8');
-            if (false === $domContainer->loadXML($container, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS)) {
+            $domContainer = $this->parseXml($container);
+
+            $node = $domContainer->getElementsByTagNameNS('*', 'rootfile')->item(0);
+            if (!$node instanceof \Dom\Element) {
                 throw new ParserException();
             }
 
-            $node = $domContainer->getElementsByTagName('rootfile')->item(0);
-            if (!$node instanceof \DOMElement) {
-                throw new ParserException();
-            }
-
-            /** @var \DOMAttr|null $packageName */
+            /** @var \Dom\Attr|null $packageName */
             $packageName = $node->attributes->getNamedItem('full-path');
             if (!$packageName) {
                 throw new ParserException();
@@ -915,13 +925,10 @@ final class Epub3Driver extends AbstractDriver
             $zip->close();
         }
 
-        $domPackage = new \DOMDocument('1.0', 'UTF-8');
-        if (false === $domPackage->loadXML($package, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS)) {
-            throw new ParserException();
-        }
+        $domPackage = $this->parseXml($package);
 
-        /** @var \DOMElement|null $packageNode */
-        $packageNode = $domPackage->getElementsByTagName('package')->item(0);
+        /** @var \Dom\Element|null $packageNode */
+        $packageNode = $domPackage->getElementsByTagNameNS('*', 'package')->item(0);
         if (!$packageNode) {
             throw new ParserException();
         }

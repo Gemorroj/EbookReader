@@ -25,6 +25,36 @@ final class HtmlDriverTest extends TestCase
         self::assertFalse(new HtmlDriver(__DIR__.'/../fixtures/fake.zip')->isValid());
     }
 
+    public function testIsValidRejectsHtmlEmbeddedInAnotherContainer(): void
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'html');
+        self::assertNotFalse($file);
+        // A binary container whose payload merely contains an HTML document.
+        \file_put_contents($file, "\x00\x01PalmDoc\x00\x02".'<html><body>hi</body></html>');
+
+        try {
+            self::assertFalse(new HtmlDriver($file)->isValid());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testIsValidAcceptsBomPrologAndComment(): void
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'html');
+        self::assertNotFalse($file);
+        \file_put_contents(
+            $file,
+            "\xEF\xBB\xBF<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- a comment -->\n<!DOCTYPE html><html><body>x</body></html>"
+        );
+
+        try {
+            self::assertTrue(new HtmlDriver($file)->isValid());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testGetMeta(): void
     {
         $meta = new HtmlDriver(self::FIXTURE)->getMeta();
