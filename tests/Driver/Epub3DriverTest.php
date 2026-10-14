@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace EbookReader\Tests\Driver;
 
-use EbookReader\Data\Epub3Data;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Format;
-use EbookReader\Resource\Style;
-use EbookReader\Resource\StyleType;
+use EbookReader\Section\Epub3Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -37,41 +35,31 @@ final class Epub3DriverTest extends TestCase
         self::assertFalse($result);
     }
 
-    /**
-     * @param Style[] $expectedStyles
-     */
     #[DataProvider('filesDataProvider')]
     public function testGetData(
         string $file,
         int $expectedCount,
+        string $expectedId,
         string $expectedTitle,
-        array $expectedStyles,
         ?bool $expectedNavigation,
-        string $expectedText
     ): void {
         $driver = new Epub3Driver($file);
-        $data = $driver->getData();
+        $data = $driver->getSections();
 
         self::assertCount($expectedCount, $data);
 
-        /** @var Epub3Data $firstData */
+        /** @var Epub3Section $firstData */
         $firstData = $data[0];
 
+        self::assertSame($expectedId, $firstData->getId(), $file);
         self::assertSame($expectedTitle, $firstData->getTitle(), $file);
         self::assertSame($expectedNavigation, $firstData->isNavigation(), $file);
-        self::assertSame($expectedText, $firstData->getText(), $file);
+        self::assertSame('application/xhtml+xml', $firstData->getMediaType(), $file);
+        self::assertStringStartsWith('<html', $firstData->getContent(), $file);
 
-        self::assertCount(\count($expectedStyles), $firstData->getStyles(), $file);
-        foreach ($expectedStyles as $expectedStyle) {
-            $styleExists = false;
-            foreach ($firstData->getStyles() as $style) {
-                if ($style->getType() === $expectedStyle->getType() && $style->getData() === $expectedStyle->getData()) {
-                    $styleExists = true;
-                    break;
-                }
-            }
-
-            self::assertTrue($styleExists, 'Not found expected style');
+        // Every referenced asset path must appear in the (normalized) markup.
+        foreach ($firstData->getResources() as $resource) {
+            self::assertStringContainsString($resource->getPath(), $firstData->getContent(), $file);
         }
     }
 
@@ -185,6 +173,7 @@ final class Epub3DriverTest extends TestCase
         self::assertSame('Владимир Маяковский. Во весь голос. Стихотворения и поэмы', $contents[0]->getTitle());
         self::assertSame(1, $contents[0]->getLevel());
         self::assertSame(1, $contents[0]->getSectionIndex());
+        self::assertSame('mh_toc_55', $contents[0]->getAnchor());
     }
 
     public function testTableOfContentsFromNav(): void
@@ -195,6 +184,7 @@ final class Epub3DriverTest extends TestCase
         self::assertSame('BIBLIOGRAPHY', $contents[1]->getTitle());
         self::assertSame(2, $contents[1]->getLevel());
         self::assertSame(2, $contents[0]->getSectionIndex());
+        self::assertSame('pgepubid00492', $contents[0]->getAnchor());
     }
 
     public function testMetaAuthorsAndSubjects(): void
@@ -211,9 +201,9 @@ final class Epub3DriverTest extends TestCase
         $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-encoded-href.epub');
         self::assertTrue($driver->isValid());
 
-        $data = $driver->getData();
+        $data = $driver->getSections();
         self::assertCount(1, $data);
-        self::assertStringContainsString('Chapter body', $data[0]->getText());
+        self::assertStringContainsString('Chapter body', $data[0]->getContent());
 
         $cover = $driver->getCover();
         self::assertNotNull($cover);
@@ -222,13 +212,20 @@ final class Epub3DriverTest extends TestCase
 
     public function testInlineImageResources(): void
     {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-nav.epub');
-        $resources = $driver->getData()[0]->getResources();
+        $resources = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-nav.epub')->getSections()[0]->getResources();
 
         self::assertNotEmpty($resources);
-        self::assertSame('images/cover.png', $resources[0]->getPath());
-        self::assertSame('image/png', $resources[0]->getMime());
-        self::assertNotSame('', $resources[0]->getData());
+
+        $images = \array_values(\array_filter($resources, static fn ($resource): bool => 'image' === $resource->getType()->value));
+        self::assertNotEmpty($images);
+        self::assertSame('EPUB/images/cover.png', $images[0]->getPath());
+        self::assertSame('image/png', $images[0]->getMime());
+        self::assertNotSame('', $images[0]->getData());
+
+        $styles = \array_values(\array_filter($resources, static fn ($resource): bool => 'style' === $resource->getType()->value));
+        self::assertNotEmpty($styles);
+        self::assertSame('EPUB/css/epub.css', $styles[0]->getPath());
+        self::assertSame('text/css', $styles[0]->getMime());
     }
 
     public static function filesProviderFake(): \Generator
@@ -242,18 +239,16 @@ final class Epub3DriverTest extends TestCase
         yield [
             __DIR__.'/../fixtures/epub/epub3-nav.epub',
             3,
+            'EPUB/cover.xhtml',
             'Children\'s Literature',
-            [new Style('css/epub.css', StyleType::LINK)],
             false,
-            '<div><img src="images/cover.png" alt="Cover Image" title="Cover Image"></img></div>',
         ];
         yield [
             __DIR__.'/../fixtures/epub/epub2-ncx-cyrillic.epub',
             14,
+            'cover.xhtml',
             'Cover of Во весь голос. Стихотворения и поэмы',
-            [new Style('body {padding:0;} img {height: 100%; max-width: 100%;} div {text-align: center; page-break-after: always;}', StyleType::CSS)],
             null,
-            '<div><div><img alt="cover" src="cover.jpg"></img></div></div>',
         ];
     }
 

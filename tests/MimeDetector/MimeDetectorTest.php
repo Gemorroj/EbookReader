@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Tests\ImageMimeDetector;
+namespace EbookReader\Tests\MimeDetector;
 
-use EbookReader\ImageMimeDetector\ImageMimeDetector;
+use EbookReader\MimeDetector\MimeDetector;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-final class ImageMimeDetectorTest extends TestCase
+final class MimeDetectorTest extends TestCase
 {
-    #[DataProvider('imagesProvider')]
+    #[DataProvider('filesProvider')]
     public function testDetect(string $data, ?string $expectedMime): void
     {
-        $detector = new ImageMimeDetector();
+        $detector = new MimeDetector();
         self::assertSame($expectedMime, $detector->detect($data));
     }
 
-    public static function imagesProvider(): \Generator
+    public static function filesProvider(): \Generator
     {
         // Real images (generated, one per supported format)
         yield [\file_get_contents(__DIR__.'/../fixtures/images/jpeg.jpg'), 'image/jpeg'];
@@ -29,11 +29,20 @@ final class ImageMimeDetectorTest extends TestCase
         yield [\file_get_contents(__DIR__.'/../fixtures/images/ico.ico'), 'image/x-icon'];
         yield [\file_get_contents(__DIR__.'/../fixtures/images/svg.svg'), 'image/svg+xml'];
 
+        // Fonts
+        yield ["\x00\x01\x00\x00".\str_repeat("\x00", 8), 'font/ttf'];
+        yield ['true'.\str_repeat("\x00", 8), 'font/ttf'];
+        yield ['OTTO'.\str_repeat("\x00", 8), 'font/otf'];
+        yield ['ttcf'.\str_repeat("\x00", 8), 'font/collection'];
+        yield ['wOFF'.\str_repeat("\x00", 8), 'font/woff'];
+        yield ['wOF2'.\str_repeat("\x00", 8), 'font/woff2'];
+
         // Edge cases and negatives
         yield ['<?xml version="1.0" encoding="UTF-8"?>'."\n".'<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'image/svg+xml'];
         yield ["MM\x00\x2A".\str_repeat("\x00", 6), 'image/tiff'];
         yield ['GIF87a'.\str_repeat("\x00", 8), 'image/gif'];
         yield ['GIF89a'.\str_repeat("\x00", 8), 'image/gif'];
+        yield ['FONT'.\str_repeat("\x00", 8), null];
         yield ['GI', null];
         yield ['GIF', null];
         yield ['RIFF'.\str_repeat("\x00", 4).'WAVE', null];

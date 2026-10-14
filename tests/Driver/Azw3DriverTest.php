@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace EbookReader\Tests\Driver;
 
-use EbookReader\Data\Azw3Data;
 use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Format;
+use EbookReader\Resource\Resource as EbookResource;
+use EbookReader\Section\Azw3Section;
 use PHPUnit\Framework\TestCase;
 
 final class Azw3DriverTest extends TestCase
@@ -106,23 +107,23 @@ final class Azw3DriverTest extends TestCase
 
     public function testGetData(): void
     {
-        $data = new Azw3Driver(self::SVG_COVER)->getData();
+        $data = new Azw3Driver(self::SVG_COVER)->getSections();
 
         self::assertCount(6, $data);
         foreach ($data as $section) {
-            self::assertInstanceOf(Azw3Data::class, $section);
+            self::assertInstanceOf(Azw3Section::class, $section);
         }
 
         self::assertSame('"Cover"', $data[0]->getTitle());
         self::assertSame('The Yellow Wallpaper', $data[1]->getTitle());
 
         // The core value of KF8 parsing: fragments merged back into the skeleton.
-        self::assertStringContainsString('John is a physician', $data[2]->getText());
+        self::assertStringContainsString('John is a physician', $data[2]->getContent());
     }
 
     public function testInlineImagesAreExtracted(): void
     {
-        $data = new Azw3Driver(self::SVG_COVER)->getData();
+        $data = new Azw3Driver(self::SVG_COVER)->getSections();
         $resources = $data[0]->getResources();
 
         self::assertCount(1, $resources);
@@ -131,20 +132,20 @@ final class Azw3DriverTest extends TestCase
         self::assertNotSame('', $resources[0]->getData());
 
         // The reference in the markup was rewritten to the resource path.
-        self::assertStringContainsString($resources[0]->getPath(), $data[0]->getText());
+        self::assertStringContainsString($resources[0]->getPath(), $data[0]->getContent());
     }
 
     public function testFlowsAreResolved(): void
     {
-        $data = new Azw3Driver(self::SVG_COVER)->getData();
-        $cover = $data[0]->getText();
+        $data = new Azw3Driver(self::SVG_COVER)->getSections();
+        $cover = $data[0]->getContent();
 
         // CSS flow inlined as a style element, SVG flow inlined as markup.
         self::assertStringContainsString('<style type="text/css">', $cover);
         self::assertStringContainsString('<svg', $cover);
 
         foreach ($data as $section) {
-            $text = $section->getText();
+            $text = $section->getContent();
             self::assertStringNotContainsString('kindle:embed', $text);
             self::assertStringNotContainsString('kindle:flow', $text);
         }
@@ -170,36 +171,47 @@ final class Azw3DriverTest extends TestCase
 
     public function testDirectRasterImagesAreExtracted(): void
     {
-        $data = new Azw3Driver(self::IMAGES_FONTS)->getData();
+        $data = new Azw3Driver(self::IMAGES_FONTS)->getSections();
 
-        $resources = 0;
+        $images = 0;
+        $fonts = 0;
         foreach ($data as $section) {
             foreach ($section->getResources() as $resource) {
-                ++$resources;
-                self::assertStringStartsWith('image/', $resource->getMime());
                 self::assertNotSame('', $resource->getData());
-                self::assertStringContainsString($resource->getPath(), $section->getText());
+                self::assertStringContainsString($resource->getPath(), $section->getContent());
+                if ('image' === $resource->getType()->value) {
+                    ++$images;
+                }
+                if ('font' === $resource->getType()->value) {
+                    ++$fonts;
+                }
             }
         }
 
-        self::assertSame(24, $resources);
+        self::assertSame(24, $images);
+        self::assertGreaterThan(0, $fonts);
     }
 
-    public function testFontReferencesRemainUnresolved(): void
+    public function testEmbeddedFontsAreExtracted(): void
     {
-        $data = new Azw3Driver(self::IMAGES_FONTS)->getData();
+        $data = new Azw3Driver(self::IMAGES_FONTS)->getSections();
 
-        $withFonts = 0;
+        $fonts = [];
         foreach ($data as $section) {
-            if (!\str_contains($section->getText(), '@font-face')) {
-                continue;
+            foreach ($section->getResources() as $resource) {
+                if ('font' === $resource->getType()->value) {
+                    $fonts[$resource->getPath()] = $resource;
+                }
             }
-            ++$withFonts;
-            // FONT records are not images, so their references are left as-is.
-            self::assertStringContainsString('kindle:embed:', $section->getText());
+            // FONT records are decoded now, so no dangling kindle:embed references remain.
+            self::assertStringNotContainsString('kindle:embed', $section->getContent());
         }
 
-        self::assertGreaterThan(0, $withFonts);
+        self::assertNotEmpty($fonts);
+        $font = \reset($fonts);
+        self::assertInstanceOf(EbookResource::class, $font);
+        self::assertStringStartsWith('font/', $font->getMime());
+        self::assertNotSame('', $font->getData());
     }
 
     public function testJointIsValid(): void
@@ -226,7 +238,7 @@ final class Azw3DriverTest extends TestCase
 
     public function testJointData(): void
     {
-        $data = new Azw3Driver(self::JOINT)->getData();
+        $data = new Azw3Driver(self::JOINT)->getSections();
 
         self::assertCount(64, $data);
 
@@ -235,7 +247,7 @@ final class Azw3DriverTest extends TestCase
             foreach ($section->getResources() as $resource) {
                 ++$resources;
                 self::assertStringStartsWith('image/', $resource->getMime());
-                self::assertStringContainsString($resource->getPath(), $section->getText());
+                self::assertStringContainsString($resource->getPath(), $section->getContent());
             }
         }
 

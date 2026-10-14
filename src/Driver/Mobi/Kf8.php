@@ -77,14 +77,14 @@ final class Kf8
      * @param list<array{0: string, 1: array<int, int[]>}> $skeletons
      * @param list<array{0: string, 1: array<int, int[]>}> $fragments
      *
-     * @return list<array{html: string, start: int, end: int}>
+     * @return list<array{name: string, html: string, start: int, end: int}>
      */
     public static function buildParts(string $text, array $skeletons, array $fragments): array
     {
         $parts = [];
         $fragmentPointer = 0;
 
-        foreach ($skeletons as [, $tags]) {
+        foreach ($skeletons as [$name, $tags]) {
             $fragmentCount = $tags[1][0] ?? 0;
             $start = $tags[6][0] ?? 0;
             $length = $tags[6][1] ?? 0;
@@ -109,7 +109,7 @@ final class Kf8
                 ++$fragmentPointer;
             }
 
-            $parts[] = ['html' => $html, 'start' => $start, 'end' => $base];
+            $parts[] = ['name' => $name, 'html' => $html, 'start' => $start, 'end' => $base];
         }
 
         return $parts;

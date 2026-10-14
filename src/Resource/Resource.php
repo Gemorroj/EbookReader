@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace EbookReader\Resource;
 
-final readonly class Resource
+/**
+ * Eager, in-memory implementation of {@see EbookResourceInterface}.
+ */
+final readonly class Resource implements EbookResourceInterface
 {
+    private ResourceType $type;
+
     public function __construct(
         private string $path,
         private string $data,
         private string $mime,
     ) {
+        $this->type = ResourceType::fromMime($mime);
     }
 
-    /**
-     * Reference exactly as it appears in the content markup.
-     */
     public function getPath(): string
     {
         return $this->path;
@@ -29,5 +32,10 @@ final readonly class Resource
     public function getMime(): string
     {
         return $this->mime;
+    }
+
+    public function getType(): ResourceType
+    {
+        return $this->type;
     }
 }

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace EbookReader\Tests\Driver;
 
-use EbookReader\Data\TxtData;
 use EbookReader\Driver\TxtDriver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
+use EbookReader\Section\TxtSection;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -69,10 +69,10 @@ final class TxtDriverTest extends TestCase
         $driver = new TxtDriver(__DIR__.'/../fixtures/txt/txt-single-line.txt');
         self::assertTrue($driver->isValid());
 
-        $data = $driver->getData();
+        $data = $driver->getSections();
         self::assertCount(1, $data);
         self::assertNull($data[0]->getTitle());
-        self::assertSame('Single line without any newline', $data[0]->getText());
+        self::assertSame('Single line without any newline', $data[0]->getContent());
 
         self::assertSame('Single line without any newline', $driver->getMeta()->getTitle());
     }
@@ -91,23 +91,22 @@ final class TxtDriverTest extends TestCase
     public function testGetData(
         string $file,
         int $expectedCount,
-        string $expectedTitle,
+        ?string $expectedTitle,
         string $expectedStartText,
         string $expectedEndText,
     ): void {
         $driver = new TxtDriver($file);
-        $data = $driver->getData();
+        $data = $driver->getSections();
 
         self::assertCount($expectedCount, $data);
 
-        /** @var TxtData $firstData */
+        /** @var TxtSection $firstData */
         $firstData = $data[0];
 
         self::assertSame($expectedTitle, $firstData->getTitle(), $file);
-        self::assertStringStartsWith($expectedStartText, $firstData->getText(), $file);
-        self::assertStringEndsWith($expectedEndText, $firstData->getText(), $file);
-
-        self::assertEmpty($firstData->getStyles(), $file);
+        self::assertSame('text/plain', $firstData->getMediaType(), $file);
+        self::assertStringStartsWith($expectedStartText, $firstData->getContent(), $file);
+        self::assertStringEndsWith($expectedEndText, $firstData->getContent(), $file);
     }
 
     #[DataProvider('filesCoverProvider')]
@@ -143,14 +142,14 @@ final class TxtDriverTest extends TestCase
         yield [
             __DIR__.'/../fixtures/txt/txt-utf8.txt',
             1,
-            'Тестовая книга',
+            null,
             "Тестовая книга\n==============",
             'Последняя строка без перевода строки.',
         ];
         yield [
             __DIR__.'/../fixtures/txt/txt-cover.zip',
             1,
-            'Тестовая книга',
+            null,
             "Тестовая книга\n==============",
             'Последняя строка без перевода строки.',
         ];

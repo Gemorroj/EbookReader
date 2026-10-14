@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Cover\Cover;
-use EbookReader\Data\Fb2Data;
-use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
 use EbookReader\Meta\Fb2Meta;
 use EbookReader\Meta\PublishDate;
 use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Resource\Style;
-use EbookReader\Resource\StyleType;
+use EbookReader\Section\Fb2Epigraph;
+use EbookReader\Section\Fb2Section;
 use EbookReader\TableOfContents\TableOfContents;
 
 /**
@@ -42,32 +40,32 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return Fb2Data[]
+     * @return Fb2Section[]
      */
-    public function getData(): array
+    public function getSections(): array
     {
-        $stylesheetNode = $this->getFictionBookStylesheet();
-
-        $styles = [];
-        if ($stylesheetNode) {
-            $styles[] = new Style($stylesheetNode->nodeValue, StyleType::CSS);
-        }
+        $stylesheet = $this->getFictionBookStylesheet()?->nodeValue;
+        $styleBlock = null !== $stylesheet && '' !== \mb_trim($stylesheet)
+            ? '<style type="text/css">'."\n".$stylesheet."\n".'</style>'
+            : '';
 
         $data = [];
-        foreach ($this->getFictionBookSections() as $sectionNode) {
-            $data[] = $this->makeSectionData($sectionNode, $styles);
+        foreach ($this->getFictionBookSections() as $index => $sectionNode) {
+            $data[] = $this->makeSectionData($index, $sectionNode, $styleBlock);
         }
 
         return $data;
     }
 
-    /**
-     * @param Style[] $styles
-     */
-    private function makeSectionData(\DOMElement $sectionNode, array $styles): Fb2Data
+    private function makeSectionData(int $index, \DOMElement $sectionNode, string $styleBlock): Fb2Section
     {
+        $id = $sectionNode->getAttribute('id');
+        if ('' === $id) {
+            $id = 'section-'.$index;
+        }
+
         $title = $sectionNode->getElementsByTagName('title')->item(0)?->textContent;
-        $text = $this->makeText($sectionNode);
+        $text = $styleBlock.$this->makeText($sectionNode);
 
         $annotation = null;
         /** @var \DOMElement|null $annotationNode */
@@ -85,11 +83,11 @@ final class Fb2Driver extends AbstractDriver
                 foreach ($epigraphNode->getElementsByTagName('text-author') as $textAuthorNode) {
                     $authors[] = $this->makeAuthorText($textAuthorNode);
                 }
-                $epigraphs[] = new Fb2DataEpigraph($epigraphText, $authors);
+                $epigraphs[] = new Fb2Epigraph($epigraphText, $authors);
             }
         }
 
-        return new Fb2Data($text, $title, $annotation, $epigraphs, $styles, $this->collectResources($sectionNode));
+        return new Fb2Section($id, $text, $title, $annotation, $epigraphs, $this->collectResources($sectionNode));
     }
 
     /**
@@ -120,7 +118,7 @@ final class Fb2Driver extends AbstractDriver
 
             $mime = $binaryNode->getAttribute('content-type');
             if ('' === $mime) {
-                $mime = $this->getImageMimeDetector()->detect($data) ?? '';
+                $mime = $this->getMimeDetector()->detect($data) ?? '';
             }
 
             $resources[] = new EbookResource($ref, $data, $mime);
@@ -214,7 +212,7 @@ final class Fb2Driver extends AbstractDriver
                     if (false !== $data) {
                         $mime = $node->getAttribute('content-type');
                         if ('' === $mime) {
-                            $mime = $this->getImageMimeDetector()->detect($data) ?? '';
+                            $mime = $this->getMimeDetector()->detect($data) ?? '';
                         }
 
                         return new Cover($data, $mime);
@@ -256,7 +254,7 @@ final class Fb2Driver extends AbstractDriver
                         $title = \mb_trim(\strip_tags($reader->readInnerXml()));
                         if ('' !== $title) {
                             $sectionIndex = \end($sectionIndexes);
-                            $entries[] = new TableOfContents($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex);
+                            $entries[] = new TableOfContents($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex, null, null);
                         }
                     }
                 } elseif ($inBody && \XMLReader::END_ELEMENT === $reader->nodeType) {

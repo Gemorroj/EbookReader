@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Cover\Cover;
-use EbookReader\Data\MobiData;
 use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\HuffCdic;
 use EbookReader\Decompressor\NoCompression;
 use EbookReader\Decompressor\PalmDocLz77;
+use EbookReader\Driver\Mobi\Font;
 use EbookReader\Driver\Mobi\Index;
 use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
@@ -18,6 +18,7 @@ use EbookReader\Format;
 use EbookReader\Meta\MobiMeta;
 use EbookReader\Meta\PublishDate;
 use EbookReader\Resource\Resource as EbookResource;
+use EbookReader\Section\MobiSection;
 use EbookReader\TableOfContents\TableOfContents;
 
 /**
@@ -53,9 +54,9 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return MobiData[]
+     * @return MobiSection[]
      */
-    public function getData(): array
+    public function getSections(): array
     {
         try {
             $f = new \SplFileObject($this->getFile(), 'r');
@@ -75,9 +76,6 @@ class MobiDriver extends AbstractDriver
             if (!isset($palmDbData['records'][0])) {
                 throw new ParserException();
             }
-
-            $f->fseek($palmDbData['records'][0]['data_offset'] + $mobiData['full_name_offset']);
-            $title = $this->decodeText($this->readBytes($f, $mobiData['full_name_length']), $mobiData['text_encoding']);
 
             $fileSize = \filesize($this->getFile());
             if (false === $fileSize) {
@@ -119,7 +117,7 @@ class MobiDriver extends AbstractDriver
         }
 
         return [
-            new MobiData($text, $title, [], $resources),
+            new MobiSection('0', $text, null, $resources),
         ];
     }
 
@@ -149,7 +147,14 @@ class MobiDriver extends AbstractDriver
             }
 
             $data = $this->readRecord($f, $records, $recordIndex, $fileSize);
-            $mime = $this->getImageMimeDetector()->detect($data);
+
+            $font = Font::parse($data);
+            if (null !== $font) {
+                $resources[] = new EbookResource($recindex, $font, $this->getMimeDetector()->detect($font) ?? 'font/ttf');
+                continue;
+            }
+
+            $mime = $this->getMimeDetector()->detect($data);
             if (null === $mime) {
                 continue;
             }
@@ -366,7 +371,7 @@ class MobiDriver extends AbstractDriver
             }
 
             $data = $this->readRecord($f, $palmDbData['records'], $recordIndex, $fileSize);
-            $mime = $this->getImageMimeDetector()->detect($data);
+            $mime = $this->getMimeDetector()->detect($data);
             if (null === $mime) {
                 return null;
             }
@@ -423,7 +428,7 @@ class MobiDriver extends AbstractDriver
             }
 
             $level = isset($tagMap[4][0]) ? $tagMap[4][0] + 1 : 1;
-            $toc[] = new TableOfContents($title, \max(1, $level), 0, $tagMap[1][0] ?? null);
+            $toc[] = new TableOfContents($title, \max(1, $level), 0, null, $tagMap[1][0] ?? null);
         }
 
         return $toc;

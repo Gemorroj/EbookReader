@@ -2,26 +2,44 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Data;
+namespace EbookReader\Section;
 
 use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Resource\Style;
 
-final readonly class Fb2Data implements EbookDataInterface
+final readonly class Fb2Section implements EbookSectionInterface
 {
     /**
-     * @param Fb2DataEpigraph[] $epigraphs
-     * @param Style[]           $styles
-     * @param EbookResource[]   $resources
+     * @param Fb2Epigraph[]   $epigraphs
+     * @param EbookResource[] $resources
      */
     public function __construct(
-        private string $text,
+        private string $id,
+        private string $content,
         private ?string $title,
         private ?string $annotation,
         private array $epigraphs = [],
-        private array $styles = [],
         private array $resources = [],
     ) {
+    }
+
+    public function getId(): string
+    {
+        return $this->id;
+    }
+
+    public function getContent(): string
+    {
+        return $this->content;
+    }
+
+    public function getTitle(): ?string
+    {
+        return $this->title;
+    }
+
+    public function getMediaType(): string
+    {
+        return 'text/html';
     }
 
     /**
@@ -32,26 +50,8 @@ final readonly class Fb2Data implements EbookDataInterface
         return $this->resources;
     }
 
-    public function getText(): string
-    {
-        return $this->text;
-    }
-
-    public function getTitle(): ?string
-    {
-        return $this->title;
-    }
-
     /**
-     * @return Style[]
-     */
-    public function getStyles(): array
-    {
-        return $this->styles;
-    }
-
-    /**
-     * @return Fb2DataEpigraph[]
+     * @return Fb2Epigraph[]
      */
     public function getEpigraphs(): array
     {

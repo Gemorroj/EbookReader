@@ -10,6 +10,7 @@ final readonly class TableOfContents
         private string $title,
         private int $level = 1,
         private ?int $sectionIndex = null,
+        private ?string $anchor = null,
         private ?int $position = null,
     ) {
     }
@@ -28,7 +29,7 @@ final readonly class TableOfContents
     }
 
     /**
-     * Index into the array returned by getData(), when the entry maps to a section.
+     * Index into the array returned by getSections(), when the entry maps to a section.
      */
     public function getSectionIndex(): ?int
     {
@@ -36,7 +37,16 @@ final readonly class TableOfContents
     }
 
     /**
-     * Byte offset within the section content, when the format provides one (MOBI filepos).
+     * Fragment identifier (element id) inside the target section, when known.
+     */
+    public function getAnchor(): ?string
+    {
+        return $this->anchor;
+    }
+
+    /**
+     * Byte offset within the section content, when the format provides one
+     * (MOBI/KF8 file position).
      */
     public function getPosition(): ?int
     {

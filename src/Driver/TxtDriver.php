@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Cover\Cover;
-use EbookReader\Data\TxtData;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
 use EbookReader\Meta\TxtMeta;
+use EbookReader\Section\TxtSection;
 use EbookReader\TableOfContents\TableOfContents;
 
 final class TxtDriver extends AbstractDriver
@@ -85,9 +85,9 @@ final class TxtDriver extends AbstractDriver
     }
 
     /**
-     * @return TxtData[]
+     * @return TxtSection[]
      */
-    public function getData(): array
+    public function getSections(): array
     {
         try {
             $file = $this->internalFile ?? $this->makeInternalFile();
@@ -106,16 +106,9 @@ final class TxtDriver extends AbstractDriver
         }
 
         $text = \mb_trim($text);
-        $pos = \strpos($text, "\n");
-        if (false !== $pos) {
-            $title = \substr($text, 0, $pos);
-            $title = \mb_trim($title);
-        } else {
-            $title = null;
-        }
 
         return [
-            new TxtData($text, $title, []),
+            new TxtSection('0', $text, null),
         ];
     }
 
@@ -136,7 +129,7 @@ final class TxtDriver extends AbstractDriver
                     if (false === $fileContent) {
                         continue;
                     }
-                    $mime = $this->getImageMimeDetector()->detect($fileContent);
+                    $mime = $this->getMimeDetector()->detect($fileContent);
                     if ($mime) {
                         $cover = new Cover($fileContent, $mime);
                         break;

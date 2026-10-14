@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace EbookReader\Tests\Driver;
 
-use EbookReader\Data\Fb2Data;
-use EbookReader\Data\Fb2DataEpigraph;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
-use EbookReader\Resource\Style;
+use EbookReader\Section\Fb2Epigraph;
+use EbookReader\Section\Fb2Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -117,7 +116,7 @@ final class Fb2DriverTest extends TestCase
         $driver = new Fb2Driver(__DIR__.'/../fixtures/fb2/fb2-inline-image.fb2');
         self::assertTrue($driver->isValid());
 
-        $data = $driver->getData();
+        $data = $driver->getSections();
         self::assertCount(1, $data);
 
         $resources = $data[0]->getResources();
@@ -134,47 +133,32 @@ final class Fb2DriverTest extends TestCase
     }
 
     /**
-     * @param Style[]           $expectedStyles
-     * @param Fb2DataEpigraph[] $expectedEpigraphs
+     * @param Fb2Epigraph[] $expectedEpigraphs
      */
     #[DataProvider('filesDataProvider')]
     public function testGetData(
         string $file,
         int $expectedCount,
         ?string $expectedTitle,
-        array $expectedStyles,
         string $expectedText,
         ?string $expectedAnnotation,
         array $expectedEpigraphs,
     ): void {
         $driver = new Fb2Driver($file);
-        $data = $driver->getData();
+        $data = $driver->getSections();
 
         self::assertCount($expectedCount, $data);
 
-        /** @var Fb2Data $firstData */
+        /** @var Fb2Section $firstData */
         $firstData = $data[0];
 
         self::assertSame($expectedTitle, $firstData->getTitle(), $file);
-        self::assertSame($expectedText, $firstData->getText(), $file);
-        self::assertCount(\count($expectedStyles), $firstData->getStyles(), $file);
-        foreach ($expectedStyles as $expectedStyle) {
-            $styleExists = false;
-            foreach ($firstData->getStyles() as $style) {
-                if ($style->getType() === $expectedStyle->getType() && $style->getData() === $expectedStyle->getData()) {
-                    $styleExists = true;
-                    break;
-                }
-            }
-
-            self::assertTrue($styleExists, 'Not found expected style');
-        }
-
+        self::assertSame($expectedText, $firstData->getContent(), $file);
         self::assertSame($expectedAnnotation, $firstData->getAnnotation(), $file);
         self::assertCount(\count($expectedEpigraphs), $firstData->getEpigraphs(), $file);
         for ($i = 0, $l = \count($expectedEpigraphs); $i < $l; ++$i) {
-            self::assertSame($expectedEpigraphs[$i]->getText(), $firstData->getEpigraphs()[$i]->getText(), $file);
-            self::assertSame($expectedEpigraphs[$i]->getAuthor(), $firstData->getEpigraphs()[$i]->getAuthor(), $file);
+            self::assertSame($expectedEpigraphs[$i]->getContent(), $firstData->getEpigraphs()[$i]->getContent(), $file);
+            self::assertSame($expectedEpigraphs[$i]->getAuthors(), $firstData->getEpigraphs()[$i]->getAuthors(), $file);
         }
     }
 
@@ -212,7 +196,6 @@ final class Fb2DriverTest extends TestCase
             __DIR__.'/../fixtures/fb2/fb2-cyrillic.fb2',
             42,
             null,
-            [],
             '<p>© Салтыков М.М., ил. на обл., 2021</p><p>© ООО «Издательство АСТ», 2021</p>',
             null,
             [],
@@ -221,10 +204,9 @@ final class Fb2DriverTest extends TestCase
             __DIR__.'/../fixtures/fb2/fb2-epigraph.zip',
             381,
             null,
-            [],
             '<p>He мысля гордый свет забавить,</p><p>Вниманье дружбы возлюбя,</p><p>Хотел бы я тебе представить</p><p>Залог достойнее тебя,</p><p>Достойнее души прекрасной,</p><p>Святой исполненной мечты,</p><p>Поэзии живой и ясной,</p><p>Высоких дум и простоты;</p><p>Но так и быть – рукой пристрастной</p><p>Прими собранье пестрых глав,</p><p>Полусмешных, полупечальных,</p><p>Простонародных, идеальных,</p><p>Небрежный плод моих забав,</p><p>Бессонниц, легких вдохновений,</p><p>Незрелых и увядших лет,</p><p>Ума холодных наблюдений</p><p>И сердца горестных замет.</p>',
             null,
-            [new Fb2DataEpigraph('<p>Pétri de vanité il avait encore plus de cette espèce d’orgueil qui fait avouer avec la même
+            [new Fb2Epigraph('<p>Pétri de vanité il avait encore plus de cette espèce d’orgueil qui fait avouer avec la même
                     indifférence les bonnes comme les mauvaises actions, suite d’un sentiment de supériorité, peut-être
                     imaginaire.
                 </p>', ['<emphasis>Tiré d’une lettre particulière</emphasis>'])],

@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Data\Azw3Data;
+use EbookReader\Driver\Mobi\Font;
 use EbookReader\Driver\Mobi\Index;
 use EbookReader\Driver\Mobi\Kf8;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
 use EbookReader\Resource\Resource as EbookResource;
+use EbookReader\Section\Azw3Section;
 use EbookReader\TableOfContents\TableOfContents;
 
 /**
@@ -54,9 +55,9 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * @return Azw3Data[]
+     * @return Azw3Section[]
      */
-    public function getData(): array
+    public function getSections(): array
     {
         try {
             $f = new \SplFileObject($this->getFile(), 'r');
@@ -170,7 +171,13 @@ final class Azw3Driver extends MobiDriver
                 }
 
                 $data = $this->readRecord($f, $records, $recordIndex, $fileSize);
-                $mime = $this->getImageMimeDetector()->detect($data);
+
+                $font = Font::parse($data);
+                if (null !== $font) {
+                    return new EbookResource($embed, $font, $this->getMimeDetector()->detect($font) ?? 'font/ttf');
+                }
+
+                $mime = $this->getMimeDetector()->detect($data);
                 if (null === $mime) {
                     return null;
                 }
@@ -181,7 +188,7 @@ final class Azw3Driver extends MobiDriver
             $data = [];
             foreach ($parts as $part) {
                 [$html, $resources] = $this->expand($part['html'], $flows, $resolveEmbed);
-                $data[] = new Azw3Data($html, self::extractTitle($html), [], $resources);
+                $data[] = new Azw3Section($part['name'], $html, self::extractTitle($html), $resources);
             }
 
             return $data;
@@ -251,7 +258,7 @@ final class Azw3Driver extends MobiDriver
 
             $level = isset($tagMap[4][0]) ? $tagMap[4][0] + 1 : 1;
             $position = $tagMap[1][0] ?? null;
-            $toc[] = new TableOfContents($title, \max(1, $level), self::sectionForPosition($position, $ranges), $position);
+            $toc[] = new TableOfContents($title, \max(1, $level), self::sectionForPosition($position, $ranges), null, $position);
         }
 
         return $toc;

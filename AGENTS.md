@@ -9,7 +9,7 @@ PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, TXT).
 ## Structure
 
 - `src/` — library code, PSR-4 `EbookReader\`
-- `tests/` — PHPUnit tests, PSR-4 `EbookReader\Tests\`
+- `tests/` — PHPUnit tests, PSR-4 `EbookReader\Tests\`; test folders mirror `src/`
 
 ## Commands
 

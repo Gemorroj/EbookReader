@@ -6,15 +6,15 @@
 
 
 ### Formats:
-| Format | Versions | Cover | Inline images | Table of contents | Content |
+| Format | Versions | Cover | Assets | Table of contents | Content |
 | --- | --- | --- | --- | --- | --- |
-| EPUB | 2 and 3 | yes | yes | yes | HTML fragments + styles |
-| MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | yes | yes | HTML |
-| AZW3 | standalone and joint KF8 (Kindle Format 8) | yes | yes | yes | HTML (CSS/SVG inlined) |
-| FB2 | 2.x, plain or ZIP | yes | yes | yes | HTML fragments |
-| TXT | plain or ZIP | ZIP only | no | no | plain text |
+| EPUB | 2 and 3 | yes | images, styles, fonts | yes (anchors) | self-contained XHTML |
+| MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | images | yes (positions) | HTML |
+| AZW3 | standalone and joint KF8 | yes | images, fonts | yes (positions) | HTML (flows inlined) |
+| FB2 | 2.x, plain or ZIP | yes | images | yes | HTML (styles inlined) |
+| TXT | plain or ZIP | ZIP only | - | no | plain text |
 
-Format detection is automatic (`EbookReaderFactory::create()`).
+Format detection is automatic (`EbookReaderFactory::create()`). Asset references in `getContent()` are normalized to the matching `Resource::getPath()`.
 
 
 ### Requirements:
@@ -31,50 +31,101 @@ Format detection is automatic (`EbookReaderFactory::create()`).
 composer require gemorroj/ebook-reader
 ```
 
-### Example:
+### Usage:
+
+The format is detected automatically:
+
 ```php
-<?php
 use EbookReader\EbookReaderFactory;
-use EbookReader\Driver\Epub3Driver;
 
-$ebookReader = EbookReaderFactory::create('file.epub');
+$book = EbookReaderFactory::create('book.epub');
+$book->getFormat();                       // EbookReader\Format::EPUB
+```
 
-echo $ebookReader->getFormat()->value;    // "epub"
+#### Metadata and cover
 
-$meta = $ebookReader->getMeta();          // EbookReader\Meta\EbookMetaInterface
-echo $meta->getTitle();
-echo $meta->getAuthor();
-$publishDate = $meta->getPublishDate();   // EbookReader\Meta\PublishDate
-var_dump($publishDate->getYear(), $publishDate->getMonth(), $publishDate->getDay());
+```php
+$meta = $book->getMeta();                 // EbookReader\Meta\EbookMetaInterface
+$meta->getTitle();
+$meta->getAuthor();                       // authors joined by ", "
+$meta->getAuthors();                      // string[]
+$meta->getSubjects();                     // string[]
+$meta->getPublisher();
+$meta->getLanguage();
+$meta->getIsbn();
+$meta->getDescription();
+$meta->getPublishDate();                  // EbookReader\Meta\PublishDate (getYear/getMonth/getDay/isEmpty)
 
-$data = $ebookReader->getData();          // EbookReader\Data\EbookDataInterface[]
-foreach ($data as $section) {
-    echo $section->getTitle();
-    echo $section->getText();             // markup as-is (usually HTML)
+$cover = $book->getCover();               // ?EbookReader\Cover\EbookCoverInterface
+if (null !== $cover) {
+    file_put_contents('cover', $cover->getData());
+    $cover->getMime();                    // e.g. "image/jpeg"
+}
+```
 
-    // inline images; getPath() matches a src/href (EPUB, FB2) or recindex (MOBI) value in getText()
+#### Content
+
+A book is a list of **sections**. Each section is self-contained markup whose
+asset references are normalized to `Resource::getPath()`:
+
+```php
+foreach ($book->getSections() as $section) {   // EbookReader\Section\EbookSectionInterface
+    $section->getId();                         // stable id, e.g. "EPUB/text/ch01.xhtml"
+    $section->getTitle();                      // title of the section, or null
+    $section->getMediaType();                  // "application/xhtml+xml" | "text/html" | "text/plain"
+    $section->getContent();                    // self-contained markup
+
+    // assets referenced by this section (images, fonts, stylesheets, ...)
     foreach ($section->getResources() as $resource) {
-        file_put_contents(basename($resource->getPath()), $resource->getData());
+        // EbookReader\Resource\EbookResourceInterface
+        $resource->getPath();                  // matches the reference inside getContent()
+        $resource->getType();                  // EbookReader\Resource\ResourceType
+        $resource->getMime();
+        $resource->getData();
     }
 }
-
-$cover = $ebookReader->getCover();        // ?EbookReader\Cover\Cover
-if ($cover) {
-    file_put_contents('cover', $cover->getData());
-}
-
-$tableOfContents = $ebookReader->getTableOfContents(); // EbookReader\TableOfContents\TableOfContents[]
-foreach ($tableOfContents as $nav) {
-    echo str_repeat('  ', $nav->getLevel() - 1).$nav->getTitle();
-    // $nav->getSectionIndex() -> index into $data; $nav->getPosition() -> offset (MOBI)
-}
-
-$ebookReader = EbookReaderFactory::create('fake.file'); // throws UnsupportedFormatException
-
-$driver = new Epub3Driver('fake.file');
-var_dump($driver->isValid());             // false
 ```
+
+#### Assets
+
+Every asset of the book at once, de-duplicated by path:
+
+```php
+foreach ($book->getResources() as $resource) { // EbookReader\Resource\EbookResourceInterface[]
+    $dir = $resource->getType()->value;        // "image", "font", "style", "audio", "video", "other"
+    mkdir($dir, 0777, true);
+    file_put_contents($dir.'/'.basename($resource->getPath()), $resource->getData());
+}
+```
+
+#### Table of contents
+
+```php
+foreach ($book->getTableOfContents() as $entry) { // EbookReader\TableOfContents\TableOfContents[]
+    echo str_repeat('  ', $entry->getLevel() - 1).$entry->getTitle();
+
+    $entry->getSectionIndex();   // index into getSections(), or null
+    $entry->getAnchor();         // element id inside the section (EPUB), or null
+    $entry->getPosition();       // byte offset inside the section (MOBI/KF8), or null
+}
+```
+
+#### Drivers and errors
+
+`EbookReaderFactory::create()` throws `UnsupportedFormatException` for an unknown
+format and `FileNotReadableException` for an unreadable file:
+
+```php
+use EbookReader\Driver\Epub3Driver;
+
+$driver = new Epub3Driver('book.epub');
+$driver->isValid();                            // true if the file is a valid EPUB; never throws
+
+EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatException
+```
+
 
 ### Limitations:
 - DRM-protected books are not supported.
-- `getText()` returns the markup as-is; TXT books may be plain text.
+- AZW3 supports standalone and joint MOBI6 + KF8 files.
+- Internal `kindle:pos:` (KF8) file-position links are not converted to anchors; EPUB `@import` chains in stylesheets are not resolved.

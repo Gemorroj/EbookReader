@@ -5,15 +5,14 @@ declare(strict_types=1);
 namespace EbookReader\Driver;
 
 use EbookReader\Cover\Cover;
-use EbookReader\Data\Epub3Data;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Format;
 use EbookReader\Meta\Epub3Meta;
 use EbookReader\Meta\PublishDate;
 use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Resource\Style;
-use EbookReader\Resource\StyleType;
+use EbookReader\Resource\ResourceType;
+use EbookReader\Section\Epub3Section;
 use EbookReader\TableOfContents\TableOfContents;
 
 /**
@@ -22,6 +21,16 @@ use EbookReader\TableOfContents\TableOfContents;
  */
 final class Epub3Driver extends AbstractDriver
 {
+    /**
+     * Attributes whose values may reference an asset or another document.
+     */
+    private const REFERENCE_ATTRIBUTES = ['href', 'src', 'data'];
+
+    /**
+     * Elements whose references point at assets (images, fonts, stylesheets, media).
+     */
+    private const ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
+
     private ?\DOMElement $packageNode = null;
     private ?string $packageDirectory = null;
 
@@ -84,55 +93,172 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return EbookResource[]
+     * @return array<string, array{href: string, mediaType: string, path: string, properties: string}>
      */
-    private function collectResources(\ZipArchive $zip, \DOMDocument $dom, string $baseDir): array
+    private function manifestMap(\DOMElement $manifestNode): array
     {
-        $resources = [];
-        $seen = [];
-        foreach ($dom->getElementsByTagName('*') as $node) {
-            $name = \strtolower($node->localName ?? $node->nodeName);
-            if ('img' === $name) {
-                $ref = $node->getAttribute('src');
-            } elseif ('image' === $name) {
-                $ref = $this->getHrefAttribute($node);
-            } else {
+        $manifest = [];
+        /** @var \DOMElement $item */
+        foreach ($manifestNode->getElementsByTagName('item') as $item) {
+            $id = $item->getAttribute('id');
+            if ('' === $id) {
                 continue;
             }
 
-            if ('' === $ref || '#' === $ref[0] || isset($seen[$ref]) || \preg_match('~^[a-z][a-z0-9+.-]*:~i', $ref)) {
+            $manifest[$id] = [
+                'href' => $item->getAttribute('href'),
+                'mediaType' => $item->getAttribute('media-type'),
+                'path' => $this->resolveZipPath($item->getAttribute('href')),
+                'properties' => $item->getAttribute('properties'),
+            ];
+        }
+
+        return $manifest;
+    }
+
+    /**
+     * Builds the book asset map (images, fonts, stylesheets, media) keyed by
+     * their canonical ZIP path, rewriting references inside stylesheets.
+     *
+     * @param array<string, array{href: string, mediaType: string, path: string, properties: string}> $manifest
+     *
+     * @return array{0: array<string, EbookResource>, 1: array<string, string[]>}
+     */
+    private function collectAssets(\ZipArchive $zip, array $manifest): array
+    {
+        $knownPaths = [];
+        foreach ($manifest as $item) {
+            $knownPaths[$item['path']] = true;
+        }
+
+        $assets = [];
+        $styleReferences = [];
+        foreach ($manifest as $item) {
+            if (ResourceType::OTHER === ResourceType::fromMime($item['mediaType'])) {
                 continue;
             }
-            $seen[$ref] = true;
 
-            $content = $zip->getFromName($this->resolveZipPath($ref, $baseDir));
+            $content = $zip->getFromName($item['path']);
             if (false === $content) {
                 continue;
             }
 
-            $resources[] = new EbookResource($ref, $content, $this->getImageMimeDetector()->detect($content) ?? '');
-        }
-
-        return $resources;
-    }
-
-    private function getHrefAttribute(\DOMElement $node): string
-    {
-        foreach ($node->attributes as $attribute) {
-            if ('href' === $attribute->localName) {
-                return $attribute->value;
+            $path = $item['path'];
+            if ('text/css' === $item['mediaType']) {
+                [$content, $references] = $this->rewriteCss($content, \dirname($path), $knownPaths);
+                $styleReferences[$path] = \array_keys($references);
             }
+
+            $mime = '' !== $item['mediaType'] ? $item['mediaType'] : ($this->getMimeDetector()->detect($content) ?? '');
+            $assets[$path] = new EbookResource($path, $content, $mime);
         }
 
-        return '';
+        return [$assets, $styleReferences];
     }
 
     /**
-     * Should unzip the EPUB file for references.
+     * Rewrites relative asset/document references to canonical ZIP paths and
+     * returns the set of referenced asset paths.
      *
-     * @return Epub3Data[]
+     * @param array<string, true> $knownPaths
+     *
+     * @return array<string, true>
      */
-    public function getData(): array
+    private function rewriteReferences(\DOMDocument $dom, string $baseDir, array $knownPaths): array
+    {
+        $referenced = [];
+        /** @var \DOMElement $node */
+        foreach ($dom->getElementsByTagName('*') as $node) {
+            $isAsset = \in_array(\strtolower($node->localName ?? $node->nodeName), self::ASSET_TAGS, true);
+
+            /** @var \DOMAttr $attribute */
+            foreach ($node->attributes as $attribute) {
+                if (!\in_array(\strtolower($attribute->localName), self::REFERENCE_ATTRIBUTES, true)) {
+                    continue;
+                }
+
+                $resolved = $this->canonicalReference($attribute->value, $baseDir);
+                if (null === $resolved) {
+                    continue;
+                }
+                [$path, $fragment] = $resolved;
+                if (!isset($knownPaths[$path])) {
+                    continue;
+                }
+
+                $attribute->value = $path.$fragment;
+                if ($isAsset) {
+                    $referenced[$path] = true;
+                }
+            }
+        }
+
+        return $referenced;
+    }
+
+    /**
+     * @param array<string, true> $knownPaths
+     *
+     * @return array{0: string, 1: array<string, true>}
+     */
+    private function rewriteCss(string $css, string $baseDir, array $knownPaths): array
+    {
+        $references = [];
+        $css = \preg_replace_callback(
+            '~url\(\s*([\'"]?)([^\'")]+)\1\s*\)~i',
+            function (array $matches) use ($baseDir, $knownPaths, &$references): string {
+                $resolved = $this->canonicalReference($matches[2], $baseDir);
+                if (null === $resolved) {
+                    return $matches[0];
+                }
+                [$path] = $resolved;
+                if (!isset($knownPaths[$path])) {
+                    return $matches[0];
+                }
+                $references[$path] = true;
+
+                return 'url('.$matches[1].$path.$matches[1].')';
+            },
+            $css
+        ) ?? $css;
+
+        return [$css, $references];
+    }
+
+    /**
+     * Resolves a non-fragment, non-external reference to [canonical path, fragment].
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function canonicalReference(string $reference, string $baseDir): ?array
+    {
+        if ('' === $reference || '#' === $reference[0] || $this->isExternal($reference)) {
+            return null;
+        }
+
+        $fragment = '';
+        $hash = \strpos($reference, '#');
+        if (false !== $hash) {
+            $fragment = \substr($reference, $hash);
+            $reference = \substr($reference, 0, $hash);
+        }
+
+        if ('' === $reference) {
+            return null;
+        }
+
+        return [$this->resolveZipPath($reference, $baseDir), $fragment];
+    }
+
+    private function isExternal(string $reference): bool
+    {
+        return \str_starts_with($reference, '//') || \preg_match('~^[a-z][a-z0-9+.-]*:~i', $reference) > 0;
+    }
+
+    /**
+     * @return Epub3Section[]
+     */
+    public function getSections(): array
     {
         $packageNode = $this->getPackageNode();
         $version = (int) $packageNode->getAttribute('version');
@@ -142,7 +268,7 @@ final class Epub3Driver extends AbstractDriver
         if (!$manifestNode instanceof \DOMElement) {
             throw new ParserException();
         }
-        $manifestItemsNode = $manifestNode->getElementsByTagName('item');
+        $manifest = $this->manifestMap($manifestNode);
 
         /** @var \DOMElement|null $spineNode */
         $spineNode = $packageNode->getElementsByTagName('spine')->item(0);
@@ -151,39 +277,29 @@ final class Epub3Driver extends AbstractDriver
         }
 
         $zip = new \ZipArchive();
-        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
-        if (true !== $res) {
+        if (true !== $zip->open($this->getFile(), \ZipArchive::RDONLY)) {
             throw new ParserException();
         }
 
         try {
+            [$assets, $styleReferences] = $this->collectAssets($zip, $manifest);
+
+            $knownPaths = [];
+            foreach ($manifest as $item) {
+                $knownPaths[$item['path']] = true;
+            }
+
             $data = [];
             /** @var \DOMElement $spinItemNode */
             foreach ($spineNode->getElementsByTagName('itemref') as $spinItemNode) {
-                $itemNode = null;
                 $id = $spinItemNode->getAttribute('idref');
-                /** @var \DOMElement $manifestItemNode */
-                foreach ($manifestItemsNode as $manifestItemNode) {
-                    if ($id === $manifestItemNode->getAttribute('id')) {
-                        $itemNode = $manifestItemNode;
-                    }
-                }
-                if (!$itemNode) {
+                if (!isset($manifest[$id])) {
                     throw new ParserException();
                 }
+                $item = $manifest[$id];
+                $documentPath = $item['path'];
 
-                // @see https://www.w3.org/publishing/epub3/epub-packages.html#app-item-properties-vocab
-                $isNavigation = 2 === $version ? null : false;
-                if ($itemNode->hasAttribute('properties')) {
-                    $properties = \preg_split('/\s+/', $itemNode->getAttribute('properties'), -1, \PREG_SPLIT_NO_EMPTY);
-                    if ($properties && \in_array('nav', $properties, true)) {
-                        $isNavigation = true;
-                    }
-                }
-
-                $zipFilePath = $this->resolveZipPath($itemNode->getAttribute('href'));
-
-                $content = $zip->getFromName($zipFilePath);
+                $content = $zip->getFromName($documentPath);
                 if (false === $content) {
                     throw new ParserException();
                 }
@@ -193,52 +309,33 @@ final class Epub3Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                /** @var \DOMElement|null $headNode */
-                $headNode = $domFile->getElementsByTagName('head')->item(0);
-                if (!$headNode instanceof \DOMElement) {
-                    throw new ParserException();
+                $isNavigation = 2 === $version ? null : false;
+                $properties = \preg_split('/\s+/', $item['properties'], -1, \PREG_SPLIT_NO_EMPTY);
+                if ($properties && \in_array('nav', $properties, true)) {
+                    $isNavigation = true;
                 }
-                $title = $headNode->getElementsByTagName('title')->item(0)?->textContent;
 
-                $styles = [];
-                $linkNodes = $headNode->getElementsByTagName('link');
-                /** @var \DOMElement $linkNode */
-                foreach ($linkNodes as $linkNode) {
-                    if ('stylesheet' === $linkNode->getAttribute('rel')) {
-                        $styles[] = new Style($linkNode->getAttribute('href'), StyleType::LINK);
+                $referenced = $this->rewriteReferences($domFile, \dirname($documentPath), $knownPaths);
+                foreach (\array_keys($referenced) as $path) {
+                    foreach ($styleReferences[$path] ?? [] as $styleReference) {
+                        $referenced[$styleReference] = true;
                     }
                 }
-                $styleNodes = $headNode->getElementsByTagName('style');
-                /** @var \DOMElement $styleNode */
-                foreach ($styleNodes as $styleNode) {
-                    $styles[] = new Style($styleNode->nodeValue, StyleType::CSS);
+
+                $resources = [];
+                foreach (\array_keys($referenced) as $path) {
+                    if (isset($assets[$path])) {
+                        $resources[] = $assets[$path];
+                    }
                 }
 
-                /** @var \DOMElement|null $bodyNode */
-                $bodyNode = $domFile->getElementsByTagName('body')->item(0);
-                if (!$bodyNode instanceof \DOMElement) {
+                $title = $domFile->getElementsByTagName('title')->item(0)?->textContent;
+                $text = $domFile->saveXML($domFile->documentElement);
+                if (false === $text) {
                     throw new ParserException();
                 }
-                $text = '';
-                foreach ($bodyNode->childNodes as $childNode) {
-                    $text .= $bodyNode->ownerDocument->saveHTML($childNode);
-                }
 
-                $bodyClass = '';
-                $bodyStyle = '';
-
-                if ($bodyNode->hasAttribute('class')) {
-                    $bodyClass = ' class="'.$bodyNode->getAttribute('class').'"';
-                }
-                if ($bodyNode->hasAttribute('style')) {
-                    $bodyStyle = ' style="'.$bodyNode->getAttribute('style').'"';
-                }
-
-                $text = '<div'.$bodyClass.$bodyStyle.'>'.$text.'</div>';
-
-                $resources = $this->collectResources($zip, $domFile, \dirname($zipFilePath));
-
-                $data[] = new Epub3Data($text, $title, $styles, $isNavigation, $resources);
+                $data[] = new Epub3Section($documentPath, $text, $title, $isNavigation, $resources);
             }
         } finally {
             $zip->close();
@@ -310,7 +407,7 @@ final class Epub3Driver extends AbstractDriver
         }
 
         if ('' === $mime) {
-            $mime = $this->getImageMimeDetector()->detect($content) ?? '';
+            $mime = $this->getMimeDetector()->detect($content) ?? '';
         }
 
         return new Cover($content, $mime);
@@ -439,7 +536,8 @@ final class Epub3Driver extends AbstractDriver
                 if ($child instanceof \DOMElement && 'a' === $child->localName) {
                     $title = \mb_trim($child->textContent);
                     if ('' !== $title) {
-                        $entries[] = new TableOfContents($title, $level, $this->resolveSectionIndex($child->getAttribute('href'), $baseDir, $spineMap));
+                        [$sectionIndex, $anchor] = $this->resolveTarget($child->getAttribute('href'), $baseDir, $spineMap);
+                        $entries[] = new TableOfContents($title, $level, $sectionIndex, $anchor);
                     }
                     break;
                 }
@@ -487,7 +585,8 @@ final class Epub3Driver extends AbstractDriver
             $title = null === $text ? '' : \mb_trim($text);
             if ('' !== $title) {
                 $src = $navPoint->getElementsByTagName('content')->item(0)?->getAttribute('src');
-                $entries[] = new TableOfContents($title, $level, null === $src ? null : $this->resolveSectionIndex($src, $baseDir, $spineMap));
+                [$sectionIndex, $anchor] = null === $src ? [null, null] : $this->resolveTarget($src, $baseDir, $spineMap);
+                $entries[] = new TableOfContents($title, $level, $sectionIndex, $anchor);
             }
 
             $this->walkNavPoints($navPoint, $level + 1, $entries, $baseDir, $spineMap);
@@ -495,7 +594,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * Maps each spine document (ZIP-relative) to its index in getData().
+     * Maps each spine document (ZIP-relative) to its index in getSections().
      *
      * @return array<string, int>
      */
@@ -532,22 +631,30 @@ final class Epub3Driver extends AbstractDriver
 
     /**
      * @param array<string, int> $spineMap
+     *
+     * @return array{0: ?int, 1: ?string}
      */
-    private function resolveSectionIndex(string $href, string $baseDir, array $spineMap): ?int
+    private function resolveTarget(string $href, string $baseDir, array $spineMap): array
     {
-        if ('' === $href || \preg_match('~^[a-z][a-z0-9+.-]*:~i', $href)) {
-            return null;
+        if ('' === $href || $this->isExternal($href)) {
+            return [null, null];
         }
 
+        $anchor = null;
         $pos = \strpos($href, '#');
         if (false !== $pos) {
+            $anchor = \substr($href, $pos + 1);
             $href = \substr($href, 0, $pos);
-        }
-        if ('' === $href) {
-            return null;
+            if ('' === $anchor) {
+                $anchor = null;
+            }
         }
 
-        return $spineMap[$this->resolveZipPath($href, $baseDir)] ?? null;
+        if ('' === $href) {
+            return [null, $anchor];
+        }
+
+        return [$spineMap[$this->resolveZipPath($href, $baseDir)] ?? null, $anchor];
     }
 
     public function getMeta(): Epub3Meta

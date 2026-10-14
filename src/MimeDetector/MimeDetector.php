@@ -2,11 +2,19 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\ImageMimeDetector;
+namespace EbookReader\MimeDetector;
 
-final class ImageMimeDetector implements ImageMimeDetectorInterface
+/**
+ * Detects image and font MIME types by magic bytes.
+ */
+final class MimeDetector implements MimeDetectorInterface
 {
     public function detect(string $data): ?string
+    {
+        return $this->detectImage($data) ?? $this->detectFont($data);
+    }
+
+    private function detectImage(string $data): ?string
     {
         if ($this->isJpeg($data)) {
             return 'image/jpeg';
@@ -31,6 +39,27 @@ final class ImageMimeDetector implements ImageMimeDetectorInterface
         }
         if ($this->isSvg($data)) {
             return 'image/svg+xml';
+        }
+
+        return null;
+    }
+
+    private function detectFont(string $data): ?string
+    {
+        if (\str_starts_with($data, 'OTTO')) {
+            return 'font/otf';
+        }
+        if (\str_starts_with($data, "\x00\x01\x00\x00") || \str_starts_with($data, 'true')) {
+            return 'font/ttf';
+        }
+        if (\str_starts_with($data, 'ttcf')) {
+            return 'font/collection';
+        }
+        if (\str_starts_with($data, 'wOFF')) {
+            return 'font/woff';
+        }
+        if (\str_starts_with($data, 'wOF2')) {
+            return 'font/woff2';
         }
 
         return null;
@@ -74,16 +103,12 @@ final class ImageMimeDetector implements ImageMimeDetectorInterface
     private function isSvg(string $data): bool
     {
         $data = \trim($data);
-        $bytes = \strtolower(\substr($data, 0, 4));
-        if ('<svg' === $bytes) {
+        if ('<svg' === \strtolower(\substr($data, 0, 4))) {
             return true;
         }
 
-        $bytes = \strtolower(\substr($data, 0, 255));
-        if (\str_starts_with($bytes, '<?xml') && \str_contains($bytes, '<svg')) {
-            return true;
-        }
+        $head = \strtolower(\substr($data, 0, 255));
 
-        return false;
+        return \str_starts_with($head, '<?xml') && \str_contains($head, '<svg');
     }
 }
