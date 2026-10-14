@@ -77,6 +77,24 @@ final class TxtDriverTest extends TestCase
         self::assertSame('Single line without any newline', $driver->getMeta()->getTitle());
     }
 
+    public function testInvalidUtf8TailIsRejected(): void
+    {
+        // Valid UTF-8 in the first 4 KiB, an invalid byte after it.
+        $file = \tempnam(\sys_get_temp_dir(), 'txt');
+        self::assertNotFalse($file);
+        \file_put_contents($file, \str_repeat('a', 4096)."\xE9");
+
+        try {
+            $driver = new TxtDriver($file);
+            self::assertTrue($driver->isValid());
+
+            $this->expectException(ParserException::class);
+            $driver->getSections();
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public static function filesProviderFake(): \Generator
     {
         yield [__DIR__.'/../fixtures/fake.xml-not-found'];

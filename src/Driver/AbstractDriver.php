@@ -7,11 +7,16 @@ namespace EbookReader\Driver;
 use EbookReader\MimeDetector\MimeDetector;
 use EbookReader\MimeDetector\MimeDetectorInterface;
 use EbookReader\Resource\EbookResourceInterface;
+use EbookReader\Text\TextDecoder;
+use EbookReader\Text\TextDecoderInterface;
 
 abstract class AbstractDriver implements EbookDriverInterface
 {
-    public function __construct(private readonly string $file, private readonly MimeDetectorInterface $mimeDetector = new MimeDetector())
-    {
+    public function __construct(
+        private readonly string $file,
+        private readonly MimeDetectorInterface $mimeDetector = new MimeDetector(),
+        private readonly TextDecoderInterface $textDecoder = new TextDecoder(),
+    ) {
     }
 
     public function getFile(): string
@@ -22,6 +27,11 @@ abstract class AbstractDriver implements EbookDriverInterface
     protected function getMimeDetector(): MimeDetectorInterface
     {
         return $this->mimeDetector;
+    }
+
+    protected function getTextDecoder(): TextDecoderInterface
+    {
+        return $this->textDecoder;
     }
 
     /**

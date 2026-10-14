@@ -8,6 +8,7 @@ use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Format;
+use EbookReader\Resource\EbookResourceInterface;
 use EbookReader\Section\Epub3Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -216,13 +217,13 @@ final class Epub3DriverTest extends TestCase
 
         self::assertNotEmpty($resources);
 
-        $images = \array_values(\array_filter($resources, static fn ($resource): bool => 'image' === $resource->getType()->value));
+        $images = \array_values(\array_filter($resources, static fn (EbookResourceInterface $resource): bool => 'image' === $resource->getType()->value));
         self::assertNotEmpty($images);
         self::assertSame('EPUB/images/cover.png', $images[0]->getPath());
         self::assertSame('image/png', $images[0]->getMime());
         self::assertNotSame('', $images[0]->getData());
 
-        $styles = \array_values(\array_filter($resources, static fn ($resource): bool => 'style' === $resource->getType()->value));
+        $styles = \array_values(\array_filter($resources, static fn (EbookResourceInterface $resource): bool => 'style' === $resource->getType()->value));
         self::assertNotEmpty($styles);
         self::assertSame('EPUB/css/epub.css', $styles[0]->getPath());
         self::assertSame('text/css', $styles[0]->getMime());

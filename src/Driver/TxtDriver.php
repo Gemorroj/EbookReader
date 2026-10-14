@@ -56,9 +56,23 @@ final class TxtDriver extends AbstractDriver
         return $this->internalFile;
     }
 
-    protected function isBinary(string $data): bool
+    /**
+     * Reads a leading slice for sniffing. When the slice contains a line break,
+     * it is cut there so it never ends inside a multibyte character.
+     */
+    private function readTextHead(\SplFileObject $file, int $size): string
     {
-        return !\mb_check_encoding($data, 'UTF-8');
+        $head = $file->fread($size);
+        if (false === $head) {
+            throw new ParserException();
+        }
+
+        $pos = \strrpos($head, "\n");
+        if (false !== $pos) {
+            $head = \substr($head, 0, $pos);
+        }
+
+        return $head;
     }
 
     public function getFormat(): Format
@@ -71,17 +85,14 @@ final class TxtDriver extends AbstractDriver
         try {
             $file = $this->internalFile ?? $this->makeInternalFile();
             $f = new \SplFileObject($file, 'r');
-            $head = $f->fread(4096);
-            if (false === $head) {
-                return false;
-            }
-
-            return !$this->isBinary($head);
+            $this->getTextDecoder()->toUtf8($this->readTextHead($f, 4096));
         } catch (\Throwable $e) {
             return false;
         } finally {
             unset($f); // close file
         }
+
+        return true;
     }
 
     /**
@@ -105,7 +116,7 @@ final class TxtDriver extends AbstractDriver
             unset($f); // close file
         }
 
-        $text = \mb_trim($text);
+        $text = \mb_trim($this->getTextDecoder()->toUtf8($text));
 
         return [
             new TxtSection('0', $text, null),
@@ -160,17 +171,19 @@ final class TxtDriver extends AbstractDriver
         }
 
         try {
-            $text = '';
-            while (!$f->eof()) {
-                $text = \mb_trim($f->fgets());
-                if ('' !== $text) {
-                    break;
-                }
-            }
+            $head = $this->getTextDecoder()->toUtf8($this->readTextHead($f, 8192));
         } finally {
             unset($f); // close file
         }
 
-        return new TxtMeta($text);
+        $title = '';
+        foreach (\explode("\n", $head) as $line) {
+            $title = \mb_trim($line);
+            if ('' !== $title) {
+                break;
+            }
+        }
+
+        return new TxtMeta($title);
     }
 }

@@ -1,26 +1,21 @@
 # AGENTS.md
 
-PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, TXT).
-
-## Requirements
-
-- PHP >= 8.4 with ext-zip, ext-dom, ext-xmlreader, ext-libxml, ext-mbstring
+PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, TXT). PHP >= 8.4 with ext-zip, ext-dom, ext-xmlreader, ext-libxml, ext-mbstring.
 
 ## Structure
 
-- `src/` — library code, PSR-4 `EbookReader\`
-- `tests/` — PHPUnit tests, PSR-4 `EbookReader\Tests\`; test folders mirror `src/`
+- `src/` — PSR-4 `EbookReader\`
+- `tests/` — PHPUnit `EbookReader\Tests\`; mirrors `src/`
 
 ## Commands
 
-```bash
-composer install
-vendor/bin/phpunit
-vendor/bin/phpstan analyse
-vendor/bin/php-cs-fixer fix
-```
+- `composer install`
+- `vendor/bin/phpunit`
+- `vendor/bin/phpstan analyse`
+- `vendor/bin/php-cs-fixer fix`
 
-## Style
+## Conventions
 
-- Follow existing code style; run php-cs-fixer before committing.
-- Keep changes minimal, add tests for new behavior.
+- Symfony style is the reference (`.php-cs-fixer.dist.php` extends `@Symfony` / `@Symfony:risky`); don't deviate without reason.
+- All text a driver returns (content, metadata, table of contents) must be UTF-8 — convert from the source charset, never leak raw non-UTF-8 bytes.
+- Add tests for new behavior.

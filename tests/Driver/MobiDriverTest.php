@@ -80,9 +80,7 @@ final class MobiDriverTest extends TestCase
 
         $result = $this->withMobi(
             self::buildMobi($title, 1, 1252, \strlen($text), 1, [$text]),
-            static function (MobiDriver $driver): array {
-                return [$driver->getSections()[0]->getContent(), $driver->getMeta()->getTitle()];
-            }
+            static fn (MobiDriver $driver): array => [$driver->getSections()[0]->getContent(), $driver->getMeta()->getTitle()]
         );
 
         self::assertSame(["R\xC3\xA9sum\xC3\xA9", "Caf\xC3\xA9"], $result);

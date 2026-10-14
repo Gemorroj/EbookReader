@@ -66,7 +66,8 @@ if (null !== $cover) {
 #### Content
 
 A book is a list of **sections**. Each section is self-contained markup whose
-asset references are normalized to `Resource::getPath()`:
+asset references are normalized to `Resource::getPath()`. All text — content,
+titles and metadata — is returned as UTF-8:
 
 ```php
 foreach ($book->getSections() as $section) {   // EbookReader\Section\EbookSectionInterface
@@ -124,6 +125,18 @@ $driver->isValid();                            // true if the file is a valid EP
 EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatException
 ```
 
+
+#### Encodings
+
+All text is returned as UTF-8. Formats that declare their charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for the rest (TXT, and future HTML/Markdown) the decoder is configurable:
+
+```php
+use EbookReader\Text\TextDecoder;
+
+EbookReaderFactory::create('book.txt');                                        // strict (default): non-UTF-8 is rejected
+EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::detect());    // guess among candidate encodings
+EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::fallback('Windows-1252'));
+```
 
 ### Limitations:
 - DRM-protected books are not supported.

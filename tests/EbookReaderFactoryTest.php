@@ -13,6 +13,7 @@ use EbookReader\EbookReaderFactory;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Format;
+use EbookReader\Text\TextDecoder;
 use PHPUnit\Framework\TestCase;
 
 final class EbookReaderFactoryTest extends TestCase
@@ -80,6 +81,27 @@ final class EbookReaderFactoryTest extends TestCase
     {
         $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/txt-utf8.txt');
         self::assertInstanceOf(TxtDriver::class, $txt);
+    }
+
+    public function testTextDecoderIsConfigurable(): void
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'txt');
+        self::assertNotFalse($file);
+        \file_put_contents($file, "Caf\xE9"); // "Café" in Windows-1252
+
+        try {
+            try {
+                EbookReaderFactory::create($file);
+                self::fail('Non-UTF-8 text must not be detected by default');
+            } catch (UnsupportedFormatException) {
+            }
+
+            $reader = EbookReaderFactory::create($file, textDecoder: TextDecoder::fallback('Windows-1252'));
+            self::assertInstanceOf(TxtDriver::class, $reader);
+            self::assertSame("Caf\xC3\xA9", $reader->getSections()[0]->getContent());
+        } finally {
+            \unlink($file);
+        }
     }
 
     public function testCreateFake(): void

@@ -24,12 +24,12 @@ final class Epub3Driver extends AbstractDriver
     /**
      * Attributes whose values may reference an asset or another document.
      */
-    private const REFERENCE_ATTRIBUTES = ['href', 'src', 'data'];
+    private const array REFERENCE_ATTRIBUTES = ['href', 'src', 'data'];
 
     /**
      * Elements whose references point at assets (images, fonts, stylesheets, media).
      */
-    private const ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
+    private const array ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
 
     private ?\DOMElement $packageNode = null;
     private ?string $packageDirectory = null;

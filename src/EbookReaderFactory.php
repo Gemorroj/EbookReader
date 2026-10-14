@@ -14,6 +14,8 @@ use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\MimeDetector\MimeDetector;
 use EbookReader\MimeDetector\MimeDetectorInterface;
+use EbookReader\Text\TextDecoder;
+use EbookReader\Text\TextDecoderInterface;
 
 final class EbookReaderFactory
 {
@@ -25,13 +27,16 @@ final class EbookReaderFactory
      * @throws UnsupportedFormatException
      * @throws FileNotReadableException
      */
-    public static function create(string $file, MimeDetectorInterface $mimeDetector = new MimeDetector()): EbookDriverInterface
-    {
+    public static function create(
+        string $file,
+        MimeDetectorInterface $mimeDetector = new MimeDetector(),
+        TextDecoderInterface $textDecoder = new TextDecoder(),
+    ): EbookDriverInterface {
         if (!\is_readable($file)) {
             throw new FileNotReadableException();
         }
 
-        foreach (self::getCandidates($file, $mimeDetector) as $driver) {
+        foreach (self::getCandidates($file, $mimeDetector, $textDecoder) as $driver) {
             if ($driver->isValid()) {
                 return $driver;
             }
@@ -45,45 +50,45 @@ final class EbookReaderFactory
      *
      * @return EbookDriverInterface[]
      */
-    private static function getCandidates(string $file, MimeDetectorInterface $mimeDetector): array
+    private static function getCandidates(string $file, MimeDetectorInterface $mimeDetector, TextDecoderInterface $textDecoder): array
     {
         $head = @\file_get_contents($file, false, null, 0, 68);
         if (false === $head) {
             return [
-                new Epub3Driver($file, $mimeDetector),
-                new Azw3Driver($file, $mimeDetector),
-                new MobiDriver($file, $mimeDetector),
-                new Fb2Driver($file, $mimeDetector),
-                new TxtDriver($file, $mimeDetector),
+                new Epub3Driver($file, $mimeDetector, $textDecoder),
+                new Azw3Driver($file, $mimeDetector, $textDecoder),
+                new MobiDriver($file, $mimeDetector, $textDecoder),
+                new Fb2Driver($file, $mimeDetector, $textDecoder),
+                new TxtDriver($file, $mimeDetector, $textDecoder),
             ];
         }
 
         // ZIP container: EPUB, FB2-ZIP or TXT-ZIP.
         if (\str_starts_with($head, "PK\x03\x04")) {
             return [
-                new Epub3Driver($file, $mimeDetector),
-                new Fb2Driver($file, $mimeDetector),
-                new TxtDriver($file, $mimeDetector),
+                new Epub3Driver($file, $mimeDetector, $textDecoder),
+                new Fb2Driver($file, $mimeDetector, $textDecoder),
+                new TxtDriver($file, $mimeDetector, $textDecoder),
             ];
         }
 
         // Palm Database (MOBI/KF8): 4-byte type + 4-byte creator at offset 60.
         if (\strlen($head) >= 68 && 'BOOKMOBI' === \substr($head, 60, 8)) {
             return [
-                new Azw3Driver($file, $mimeDetector),
-                new MobiDriver($file, $mimeDetector),
-                new Fb2Driver($file, $mimeDetector),
-                new TxtDriver($file, $mimeDetector),
+                new Azw3Driver($file, $mimeDetector, $textDecoder),
+                new MobiDriver($file, $mimeDetector, $textDecoder),
+                new Fb2Driver($file, $mimeDetector, $textDecoder),
+                new TxtDriver($file, $mimeDetector, $textDecoder),
             ];
         }
 
         // Plain XML (FB2) or plain text.
         return [
-            new Epub3Driver($file, $mimeDetector),
-            new Azw3Driver($file, $mimeDetector),
-            new MobiDriver($file, $mimeDetector),
-            new Fb2Driver($file, $mimeDetector),
-            new TxtDriver($file, $mimeDetector),
+            new Epub3Driver($file, $mimeDetector, $textDecoder),
+            new Azw3Driver($file, $mimeDetector, $textDecoder),
+            new MobiDriver($file, $mimeDetector, $textDecoder),
+            new Fb2Driver($file, $mimeDetector, $textDecoder),
+            new TxtDriver($file, $mimeDetector, $textDecoder),
         ];
     }
 }
