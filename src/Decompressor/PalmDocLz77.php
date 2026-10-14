@@ -16,6 +16,7 @@ final class PalmDocLz77 implements DecompressorInterface
      */
     private array $buffer;
 
+    #[\Override]
     public function decompress(string $data): string
     {
         $unpacked = \unpack('C*', $data);

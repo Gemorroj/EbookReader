@@ -31,11 +31,13 @@ final class Azw3Driver extends MobiDriver
 {
     private const int NULL_INDEX = 0xFFFFFFFF;
 
+    #[\Override]
     public function getFormat(): Format
     {
         return Format::AZW3;
     }
 
+    #[\Override]
     public function isValid(): bool
     {
         try {
@@ -57,6 +59,7 @@ final class Azw3Driver extends MobiDriver
     /**
      * @return Azw3Section[]
      */
+    #[\Override]
     public function getSections(): array
     {
         try {
@@ -200,6 +203,7 @@ final class Azw3Driver extends MobiDriver
     /**
      * @return TableOfContents[]
      */
+    #[\Override]
     public function getTableOfContents(): array
     {
         try {

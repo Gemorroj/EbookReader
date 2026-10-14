@@ -55,6 +55,7 @@ final class HuffCdic implements DecompressorInterface
         }
     }
 
+    #[\Override]
     public function decompress(string $data): string
     {
         return $this->unpack($data);

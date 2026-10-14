@@ -8,6 +8,7 @@ use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\EbookDriverInterface;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
+use EbookReader\Driver\HtmlDriver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Driver\TxtDriver;
 use EbookReader\Exception\FileNotReadableException;
@@ -59,6 +60,7 @@ final class EbookReaderFactory
                 new Azw3Driver($file, $mimeDetector, $textDecoder),
                 new MobiDriver($file, $mimeDetector, $textDecoder),
                 new Fb2Driver($file, $mimeDetector, $textDecoder),
+                new HtmlDriver($file, $mimeDetector, $textDecoder),
                 new TxtDriver($file, $mimeDetector, $textDecoder),
             ];
         }
@@ -82,12 +84,13 @@ final class EbookReaderFactory
             ];
         }
 
-        // Plain XML (FB2) or plain text.
+        // Plain XML (FB2), HTML or plain text.
         return [
             new Epub3Driver($file, $mimeDetector, $textDecoder),
             new Azw3Driver($file, $mimeDetector, $textDecoder),
             new MobiDriver($file, $mimeDetector, $textDecoder),
             new Fb2Driver($file, $mimeDetector, $textDecoder),
+            new HtmlDriver($file, $mimeDetector, $textDecoder),
             new TxtDriver($file, $mimeDetector, $textDecoder),
         ];
     }

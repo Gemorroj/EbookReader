@@ -19,21 +19,25 @@ final readonly class Resource implements EbookResourceInterface
         $this->type = ResourceType::fromMime($mime);
     }
 
+    #[\Override]
     public function getPath(): string
     {
         return $this->path;
     }
 
+    #[\Override]
     public function getData(): string
     {
         return $this->data;
     }
 
+    #[\Override]
     public function getMime(): string
     {
         return $this->mime;
     }
 
+    #[\Override]
     public function getType(): ResourceType
     {
         return $this->type;

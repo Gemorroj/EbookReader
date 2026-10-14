@@ -19,21 +19,25 @@ final readonly class TxtSection implements EbookSectionInterface
     ) {
     }
 
+    #[\Override]
     public function getId(): string
     {
         return $this->id;
     }
 
+    #[\Override]
     public function getContent(): string
     {
         return $this->content;
     }
 
+    #[\Override]
     public function getTitle(): ?string
     {
         return $this->title;
     }
 
+    #[\Override]
     public function getMediaType(): string
     {
         return 'text/plain';
@@ -42,6 +46,7 @@ final readonly class TxtSection implements EbookSectionInterface
     /**
      * @return EbookResource[]
      */
+    #[\Override]
     public function getResources(): array
     {
         return $this->resources;

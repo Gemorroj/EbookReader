@@ -28,11 +28,13 @@ use EbookReader\TableOfContents\TableOfContents;
  */
 class MobiDriver extends AbstractDriver
 {
+    #[\Override]
     public function getFormat(): Format
     {
         return Format::MOBI;
     }
 
+    #[\Override]
     public function isValid(): bool
     {
         try {
@@ -56,6 +58,7 @@ class MobiDriver extends AbstractDriver
     /**
      * @return MobiSection[]
      */
+    #[\Override]
     public function getSections(): array
     {
         try {
@@ -340,6 +343,7 @@ class MobiDriver extends AbstractDriver
         return (int) \hexdec(\bin2hex($this->readBytes($file, $length)));
     }
 
+    #[\Override]
     public function getCover(): ?Cover
     {
         try {
@@ -385,6 +389,7 @@ class MobiDriver extends AbstractDriver
     /**
      * @return TableOfContents[]
      */
+    #[\Override]
     public function getTableOfContents(): array
     {
         try {
@@ -434,6 +439,7 @@ class MobiDriver extends AbstractDriver
         return $toc;
     }
 
+    #[\Override]
     public function getMeta(): MobiMeta
     {
         try {

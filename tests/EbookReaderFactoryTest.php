@@ -7,6 +7,7 @@ namespace EbookReader\Tests;
 use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
+use EbookReader\Driver\HtmlDriver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Driver\TxtDriver;
 use EbookReader\EbookReaderFactory;
@@ -81,6 +82,13 @@ final class EbookReaderFactoryTest extends TestCase
     {
         $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/txt-utf8.txt');
         self::assertInstanceOf(TxtDriver::class, $txt);
+    }
+
+    public function testCreateHtml(): void
+    {
+        $html = EbookReaderFactory::create(__DIR__.'/fixtures/html/simple.html');
+        self::assertInstanceOf(HtmlDriver::class, $html);
+        self::assertSame(Format::HTML, $html->getFormat());
     }
 
     public function testTextDecoderIsConfigurable(): void

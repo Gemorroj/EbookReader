@@ -10,5 +10,6 @@ enum Format: string
     case MOBI = 'mobi';
     case AZW3 = 'azw3';
     case FB2 = 'fb2';
+    case HTML = 'html';
     case TXT = 'txt';
 }

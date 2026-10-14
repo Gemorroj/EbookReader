@@ -97,6 +97,7 @@ final readonly class TextDecoder implements TextDecoderInterface
     /**
      * @throws ParserException when the charset cannot be determined
      */
+    #[\Override]
     public function toUtf8(string $bytes, ?string $declaredCharset = null): string
     {
         if ('' === $bytes) {

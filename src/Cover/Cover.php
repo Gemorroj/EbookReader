@@ -12,11 +12,13 @@ final readonly class Cover implements EbookCoverInterface
     ) {
     }
 
+    #[\Override]
     public function getData(): string
     {
         return $this->data;
     }
 
+    #[\Override]
     public function getMime(): string
     {
         return $this->mime;

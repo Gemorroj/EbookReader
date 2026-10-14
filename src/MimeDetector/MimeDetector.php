@@ -9,6 +9,7 @@ namespace EbookReader\MimeDetector;
  */
 final class MimeDetector implements MimeDetectorInterface
 {
+    #[\Override]
     public function detect(string $data): ?string
     {
         return $this->detectImage($data) ?? $this->detectFont($data);

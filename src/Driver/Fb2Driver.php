@@ -23,11 +23,13 @@ final class Fb2Driver extends AbstractDriver
 {
     private ?string $internalFile = null;
 
+    #[\Override]
     public function getFormat(): Format
     {
         return Format::FB2;
     }
 
+    #[\Override]
     public function isValid(): bool
     {
         try {
@@ -42,6 +44,7 @@ final class Fb2Driver extends AbstractDriver
     /**
      * @return Fb2Section[]
      */
+    #[\Override]
     public function getSections(): array
     {
         $stylesheet = $this->getFictionBookStylesheet()?->nodeValue;
@@ -190,6 +193,7 @@ final class Fb2Driver extends AbstractDriver
         return \implode(' ', $author);
     }
 
+    #[\Override]
     public function getCover(): ?Cover
     {
         // http://www.fictionbook.org/index.php/%D0%AD%D0%BB%D0%B5%D0%BC%D0%B5%D0%BD%D1%82_coverpage
@@ -227,6 +231,7 @@ final class Fb2Driver extends AbstractDriver
     /**
      * @return TableOfContents[]
      */
+    #[\Override]
     public function getTableOfContents(): array
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
@@ -272,6 +277,7 @@ final class Fb2Driver extends AbstractDriver
         return $entries;
     }
 
+    #[\Override]
     public function getMeta(): Fb2Meta
     {
         $descriptionNode = $this->getFictionBookDescription();

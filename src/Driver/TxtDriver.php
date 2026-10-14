@@ -75,11 +75,13 @@ final class TxtDriver extends AbstractDriver
         return $head;
     }
 
+    #[\Override]
     public function getFormat(): Format
     {
         return Format::TXT;
     }
 
+    #[\Override]
     public function isValid(): bool
     {
         try {
@@ -98,6 +100,7 @@ final class TxtDriver extends AbstractDriver
     /**
      * @return TxtSection[]
      */
+    #[\Override]
     public function getSections(): array
     {
         try {
@@ -123,6 +126,7 @@ final class TxtDriver extends AbstractDriver
         ];
     }
 
+    #[\Override]
     public function getCover(): ?Cover
     {
         $cover = null;
@@ -156,11 +160,13 @@ final class TxtDriver extends AbstractDriver
     /**
      * @return TableOfContents[]
      */
+    #[\Override]
     public function getTableOfContents(): array
     {
         return [];
     }
 
+    #[\Override]
     public function getMeta(): TxtMeta
     {
         try {

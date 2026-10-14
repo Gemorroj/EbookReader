@@ -9,6 +9,7 @@ namespace EbookReader\Decompressor;
  */
 final class NoCompression implements DecompressorInterface
 {
+    #[\Override]
     public function decompress(string $data): string
     {
         return $data;

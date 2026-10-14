@@ -34,11 +34,13 @@ final class Epub3Driver extends AbstractDriver
     private ?\DOMElement $packageNode = null;
     private ?string $packageDirectory = null;
 
+    #[\Override]
     public function getFormat(): Format
     {
         return Format::EPUB;
     }
 
+    #[\Override]
     public function isValid(): bool
     {
         try {
@@ -258,6 +260,7 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @return Epub3Section[]
      */
+    #[\Override]
     public function getSections(): array
     {
         $packageNode = $this->getPackageNode();
@@ -344,6 +347,7 @@ final class Epub3Driver extends AbstractDriver
         return $data;
     }
 
+    #[\Override]
     public function getCover(): ?Cover
     {
         // https://wiki.mobileread.com/wiki/Ebook_Covers
@@ -416,6 +420,7 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @return TableOfContents[]
      */
+    #[\Override]
     public function getTableOfContents(): array
     {
         $packageNode = $this->getPackageNode();
@@ -657,6 +662,7 @@ final class Epub3Driver extends AbstractDriver
         return [$spineMap[$this->resolveZipPath($href, $baseDir)] ?? null, $anchor];
     }
 
+    #[\Override]
     public function getMeta(): Epub3Meta
     {
         $packageNode = $this->getPackageNode();

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, TXT). PHP >= 8.4 with ext-zip, ext-dom, ext-xmlreader, ext-libxml, ext-mbstring.
+PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, HTML, TXT). PHP >= 8.4 with ext-zip, ext-dom, ext-xmlreader, ext-libxml, ext-mbstring.
 
 ## Structure
 
