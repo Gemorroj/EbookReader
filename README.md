@@ -14,7 +14,7 @@
 | FB2 | 2.x, plain or ZIP | yes | images | yes | HTML (styles inlined) |
 | TXT | plain or ZIP | ZIP only | - | no | plain text |
 
-Format detection is automatic (`EbookReaderFactory::create()`). Asset references in `getContent()` are normalized to the matching `Resource::getPath()`.
+Every format is read through the same interface. `EbookReaderFactory::create()` detects the format automatically; the returned reader exposes metadata, cover, table of contents, content sections and their assets.
 
 
 ### Requirements:

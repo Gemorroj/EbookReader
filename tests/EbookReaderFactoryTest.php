@@ -56,6 +56,26 @@ final class EbookReaderFactoryTest extends TestCase
         self::assertInstanceOf(Azw3Driver::class, $joint);
     }
 
+    public function testCreatePrc(): void
+    {
+        // Mobipocket ".prc" is a plain MOBI container. Detection is by content,
+        // so the extension does not matter: the same bytes under ".prc" are read.
+        $file = \tempnam(\sys_get_temp_dir(), 'prc');
+        self::assertNotFalse($file);
+        $prc = $file.'.prc';
+        \rename($file, $prc);
+        \copy(__DIR__.'/fixtures/mobi/palmodoc-cyrillic.mobi', $prc);
+
+        try {
+            $reader = EbookReaderFactory::create($prc);
+            self::assertInstanceOf(MobiDriver::class, $reader);
+            self::assertSame(Format::MOBI, $reader->getFormat());
+            self::assertSame('Во весь голос. Стихотворения и поэмы', $reader->getMeta()->getTitle());
+        } finally {
+            \unlink($prc);
+        }
+    }
+
     public function testCreateTxt(): void
     {
         $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/txt-utf8.txt');
