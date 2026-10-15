@@ -96,6 +96,28 @@ final class MobiDriverTest extends TestCase
         self::assertSame('HELLO', $text);
     }
 
+    public function testNormalizesRawMarkup(): void
+    {
+        $text = '<html><body><p>one</p><p><a filepos=0000000012>go</a>'
+            .'<img recindex="00001"/><source recindex="2"/>'
+            .'<mbp:pagebreak/><mbp:audio/></p></body></html>';
+
+        $content = $this->withMobi(
+            self::buildMobi('Title', 1, 65001, \strlen($text), 1, [$text]),
+            static fn (MobiDriver $driver): string => $driver->getSections()[0]->getContent()
+        );
+
+        // The link and its anchor target share the same canonical id.
+        self::assertStringContainsString('href="#filepos_12"', $content);
+        self::assertStringContainsString('<a id="filepos_12"></a>', $content);
+        self::assertStringContainsString('<img src="00001"/>', $content);
+        self::assertStringContainsString('<source src="2"/>', $content);
+        self::assertStringContainsString('<hr/>', $content);
+        self::assertStringNotContainsString('recindex', $content);
+        self::assertStringNotContainsString('filepos=', $content);
+        self::assertStringNotContainsString('mbp:', $content);
+    }
+
     public function testUnsupportedCompression(): void
     {
         $this->expectException(UnsupportedCompressionException::class);
@@ -118,7 +140,7 @@ final class MobiDriverTest extends TestCase
         self::assertSame('Libmobi', $driver->getMeta()->getTitle());
 
         $text = $driver->getSections()[0]->getContent();
-        self::assertSame(111701, \strlen($text));
+        self::assertSame(111724, \strlen($text));
         self::assertStringContainsString('This is a sample for testing libmobi project.', $text);
     }
 
@@ -131,6 +153,11 @@ final class MobiDriverTest extends TestCase
         self::assertSame('00001', $resources[0]->getPath());
         self::assertStringStartsWith('image/', $resources[0]->getMime());
         self::assertNotSame('', $resources[0]->getData());
+
+        // recindex is rewritten to src so it matches the resource path above.
+        $content = $driver->getSections()[0]->getContent();
+        self::assertStringContainsString('<img src="00001"', $content);
+        self::assertStringNotContainsString('recindex', $content);
     }
 
     public function testTableOfContents(): void
@@ -253,8 +280,8 @@ final class MobiDriverTest extends TestCase
             __DIR__.'/../fixtures/mobi/palmodoc-cyrillic.mobi',
             1,
             null,
-            "<html><head><guide><reference type=\"toc\" title=\"Table of Contents\" filepos=0000231502 /></guide></head><body><p height=\"1em\" width=\"0pt\" align=\"left\"><font size=\"4\"><b><span bgcolor=\"#f1f1f1\">Annotation</span></b></font></p><p height=\"1em\" width=\"2em\" align=\"justify\">Владимир Владимирович Маяковский (1893–1930)\u{a0}– один из крупнейших советских поэтов, новаторское творчество которого имело огромное значение для всей поэзии ХХ века.</p>",
-            '<p height="0pt" width="-14pt"><a filepos=0000229558>Примечания</a></p><p height="0pt" width="-14pt"><a filepos=0000229785>1</a></p><p height="0pt" width="-14pt"><a filepos=0000230081>2</a></p><p height="0pt" width="-14pt"><a filepos=0000230367>3</a></p><p height="0pt" width="-14pt"><a filepos=0000230677>4</a></p><p height="0pt" width="-14pt"><a filepos=0000230961>5</a></p><p height="0pt" width="-14pt"><a filepos=0000231242>6</a></p><mbp:pagebreak/><a ></a> <a ></a> <a ></a></body></html>',
+            "<html><head><guide><reference type=\"toc\" title=\"Table of Contents\" href=\"#filepos_231502\" /></guide></head><body><a id=\"filepos_109\"></a><p height=\"1em\" width=\"0pt\" align=\"left\"><font size=\"4\"><b><span bgcolor=\"#f1f1f1\">Annotation</span></b></font></p><p height=\"1em\" width=\"2em\" align=\"justify\">Владимир Владимирович Маяковский (1893–1930)\u{a0}– один из крупнейших советских поэтов, новаторское творчество которого имело огромное значение для всей поэзии ХХ века.</p>",
+            '<p height="0pt" width="-14pt"><a href="#filepos_229558">Примечания</a></p><p height="0pt" width="-14pt"><a href="#filepos_229785">1</a></p><p height="0pt" width="-14pt"><a href="#filepos_230081">2</a></p><p height="0pt" width="-14pt"><a href="#filepos_230367">3</a></p><p height="0pt" width="-14pt"><a href="#filepos_230677">4</a></p><p height="0pt" width="-14pt"><a href="#filepos_230961">5</a></p><p height="0pt" width="-14pt"><a href="#filepos_231242">6</a></p><hr/><a ></a> <a ></a> <a ></a></body></html>',
         ];
     }
 

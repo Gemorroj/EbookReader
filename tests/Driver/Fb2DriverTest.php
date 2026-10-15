@@ -124,6 +124,113 @@ final class Fb2DriverTest extends TestCase
         self::assertSame('#pic', $resources[0]->getPath());
         self::assertSame('image/png', $resources[0]->getMime());
         self::assertNotSame('', $resources[0]->getData());
+
+        // The FB2 <image xlink:href> reference is rewritten to a plain HTML
+        // <img src> that points at the resource path exposed above.
+        $content = $data[0]->getContent();
+        self::assertStringContainsString('<img src="#pic"/>', $content);
+        self::assertStringNotContainsString('<image', $content);
+        self::assertStringNotContainsString('xlink', $content);
+    }
+
+    public function testNormalizesMarkup(): void
+    {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+            .'<description><title-info><book-title>T</book-title>'
+            .'<author><first-name>A</first-name><last-name>B</last-name></author>'
+            .'<lang>en</lang></title-info></description>'
+            .'<body><section id="s1"><title><p>Chapter</p></title>'
+            .'<subtitle><p>Sub</p></subtitle>'
+            .'<p>Hello <emphasis>world</emphasis> <a l:href="#n1" type="note">[1]</a></p>'
+            .'<empty-line/><image l:href="#img"/></section></body>'
+            .'<binary id="img" content-type="image/png">iVBORw0KGgo=</binary>'
+            .'</FictionBook>';
+
+        $file = \tempnam(\sys_get_temp_dir(), 'fb2');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $xml);
+
+        try {
+            $driver = new Fb2Driver($file);
+            self::assertTrue($driver->isValid());
+
+            $sections = $driver->getSections();
+            self::assertCount(1, $sections);
+            self::assertSame('Chapter', $sections[0]->getTitle());
+            self::assertSame(
+                '<h2>Chapter</h2><h3>Sub</h3>'
+                .'<p>Hello <em>world</em> <a href="#n1">[1]</a></p>'
+                .'<br/><img src="#img"/>',
+                $sections[0]->getContent()
+            );
+            self::assertSame(['#img'], \array_map(
+                static fn ($resource): string => $resource->getPath(),
+                $sections[0]->getResources()
+            ));
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testNormalizesInlineAndBlockMarkup(): void
+    {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+            .'<description><title-info><book-title>T</book-title>'
+            .'<author><first-name>A</first-name><last-name>B</last-name></author>'
+            .'<lang>en</lang></title-info></description>'
+            .'<body><section id="outer"><title><p>Outer</p></title>'
+            .'<p>A &amp; B &lt; C &gt; D</p>'
+            .'<cite><p>quoted</p></cite>'
+            .'<table><tr><td>c1</td><th>c2</th></tr></table>'
+            .'<p><strong>bold</strong> <strikethrough>st</strikethrough> <sub>sub</sub> <sup>sup</sup>'
+            .' <code>co</code> <style name="hl">styled</style></p>'
+            .'<p><unknown>anon</unknown><image/><a>plain</a></p>'
+            .'<section id="inner"><title><p>Inner</p></title>'
+            .'<p>nested text</p><image l:href="#inner-img"/></section>'
+            .'</section></body>'
+            .'<binary id="inner-img" content-type="image/png">iVBORw0KGgo=</binary>'
+            .'</FictionBook>';
+
+        $file = \tempnam(\sys_get_temp_dir(), 'fb2');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $xml);
+
+        try {
+            $sections = new Fb2Driver($file)->getSections();
+            self::assertCount(2, $sections);
+
+            $outer = $sections[0]->getContent();
+            self::assertStringContainsString('<h2>Outer</h2>', $outer);
+            self::assertStringContainsString('<p>A &amp; B &lt; C &gt; D</p>', $outer);
+            self::assertStringContainsString('<blockquote><p>quoted</p></blockquote>', $outer);
+            self::assertStringContainsString('<table><tr><td>c1</td><th>c2</th></tr></table>', $outer);
+            self::assertStringContainsString('<strong>bold</strong>', $outer);
+            self::assertStringContainsString('<s>st</s>', $outer);
+            self::assertStringContainsString('<sub>sub</sub>', $outer);
+            self::assertStringContainsString('<sup>sup</sup>', $outer);
+            self::assertStringContainsString('<code>co</code>', $outer);
+            self::assertStringContainsString('<span class="hl">styled</span>', $outer);
+
+            // Unknown tags are unwrapped, an image without href is dropped and
+            // a link without href keeps its text.
+            self::assertStringContainsString('<p>anon<a>plain</a></p>', $outer);
+
+            // A nested section is emitted on its own and must not leak into the
+            // parent content (nor its resources into the parent section).
+            self::assertStringNotContainsString('nested text', $outer);
+            self::assertSame([], $sections[0]->getResources());
+
+            self::assertSame('Inner', $sections[1]->getTitle());
+            self::assertStringContainsString('<h2>Inner</h2><p>nested text</p><img src="#inner-img"/>', $sections[1]->getContent());
+            self::assertSame(['#inner-img'], \array_map(
+                static fn ($resource): string => $resource->getPath(),
+                $sections[1]->getResources()
+            ));
+        } finally {
+            \unlink($file);
+        }
     }
 
     public static function filesProviderFake(): \Generator
@@ -196,7 +303,7 @@ final class Fb2DriverTest extends TestCase
             __DIR__.'/../fixtures/fb2/fb2-cyrillic.fb2',
             42,
             null,
-            '<p>© Салтыков М.М., ил. на обл., 2021</p><p>© ООО «Издательство АСТ», 2021</p>',
+            '<p>© Салтыков М.М., ил. на обл., 2021</p><p>© ООО «Издательство АСТ», 2021</p><h3>* * *</h3>',
             null,
             [],
         ];
@@ -204,12 +311,12 @@ final class Fb2DriverTest extends TestCase
             __DIR__.'/../fixtures/fb2/fb2-epigraph.zip',
             381,
             null,
-            '<p>He мысля гордый свет забавить,</p><p>Вниманье дружбы возлюбя,</p><p>Хотел бы я тебе представить</p><p>Залог достойнее тебя,</p><p>Достойнее души прекрасной,</p><p>Святой исполненной мечты,</p><p>Поэзии живой и ясной,</p><p>Высоких дум и простоты;</p><p>Но так и быть – рукой пристрастной</p><p>Прими собранье пестрых глав,</p><p>Полусмешных, полупечальных,</p><p>Простонародных, идеальных,</p><p>Небрежный плод моих забав,</p><p>Бессонниц, легких вдохновений,</p><p>Незрелых и увядших лет,</p><p>Ума холодных наблюдений</p><p>И сердца горестных замет.</p>',
+            '<div class="poem"><div class="stanza"><p>He мысля гордый свет забавить,</p><p>Вниманье дружбы возлюбя,</p><p>Хотел бы я тебе представить</p><p>Залог достойнее тебя,</p><p>Достойнее души прекрасной,</p><p>Святой исполненной мечты,</p><p>Поэзии живой и ясной,</p><p>Высоких дум и простоты;</p><p>Но так и быть – рукой пристрастной</p><p>Прими собранье пестрых глав,</p><p>Полусмешных, полупечальных,</p><p>Простонародных, идеальных,</p><p>Небрежный плод моих забав,</p><p>Бессонниц, легких вдохновений,</p><p>Незрелых и увядших лет,</p><p>Ума холодных наблюдений</p><p>И сердца горестных замет.</p></div></div>',
             null,
             [new Fb2Epigraph('<p>Pétri de vanité il avait encore plus de cette espèce d’orgueil qui fait avouer avec la même
                     indifférence les bonnes comme les mauvaises actions, suite d’un sentiment de supériorité, peut-être
                     imaginaire.
-                </p>', ['<emphasis>Tiré d’une lettre particulière</emphasis>'])],
+                </p>', ['<em>Tiré d’une lettre particulière</em><a href="#n_1">[1]</a>'])],
         ];
     }
 

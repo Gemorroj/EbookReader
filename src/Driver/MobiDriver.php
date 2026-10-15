@@ -112,9 +112,13 @@ class MobiDriver extends AbstractDriver
             if ($textLength > 0 && \strlen($text) > $textLength) {
                 $text = \substr($text, 0, $textLength);
             }
+            // Anchor targets must be placed while the byte offsets still match
+            // the raw text, before decoding shifts them.
+            $text = $this->insertFilePosTargets($text);
             $text = $this->decodeText($text, $mobiData['text_encoding']);
 
             $resources = $this->collectResources($f, $palmDbData['records'], $mobiData, $text, $fileSize);
+            $text = $this->normalizeContent($text);
         } finally {
             unset($f); // close file
         }
@@ -122,6 +126,54 @@ class MobiDriver extends AbstractDriver
         return [
             new Section('0', $text, null, 'text/html', $resources),
         ];
+    }
+
+    /**
+     * Inserts an anchor at every byte offset targeted by a raw `filepos`
+     * reference, so the rewritten `href="#filepos_N"` links have a target.
+     */
+    private function insertFilePosTargets(string $text): string
+    {
+        if (!\preg_match_all('~filepos\s*=\s*"?(\d+)"?~i', $text, $matches)) {
+            return $text;
+        }
+
+        $offsets = \array_unique(\array_map('\intval', $matches[1]));
+        \rsort($offsets);
+
+        $length = \strlen($text);
+        foreach ($offsets as $offset) {
+            if ($offset <= 0 || $offset > $length) {
+                continue;
+            }
+            $text = \substr($text, 0, $offset).'<a id="filepos_'.$offset.'"></a>'.\substr($text, $offset);
+        }
+
+        return $text;
+    }
+
+    /**
+     * Turns MOBI-specific markup into self-contained HTML: image references
+     * become `src` pointing at the resource path, `filepos` links become
+     * fragment anchors, and the Mobipocket helper tags are cleaned up.
+     */
+    private function normalizeContent(string $text): string
+    {
+        $text = \preg_replace_callback(
+            '~<(?:img|source)\b[^>]*>~i',
+            static fn (array $matches): string => \preg_replace('~\brecindex\s*=\s*("?)(\d+)\1~i', 'src="$2"', $matches[0]) ?? $matches[0],
+            $text
+        ) ?? $text;
+
+        $text = \preg_replace_callback(
+            '~(\s)filepos\s*=\s*"?(\d+)"?~i',
+            static fn (array $matches): string => $matches[1].'href="#filepos_'.(int) $matches[2].'"',
+            $text
+        ) ?? $text;
+        $text = \preg_replace('~<mbp:pagebreak\s*/?>~i', '<hr/>', $text) ?? $text;
+        $text = \preg_replace('~</?mbp:[a-z0-9_:-]+[^>]*>~i', '', $text) ?? $text;
+
+        return $text;
     }
 
     /**

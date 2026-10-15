@@ -67,30 +67,47 @@ final class Fb2Driver extends AbstractDriver
             $id = 'section-'.$index;
         }
 
-        $title = $sectionNode->getElementsByTagName('title')->item(0)?->textContent;
-        $text = $styleBlock.$this->makeText($sectionNode);
+        $titleNode = self::childElements($sectionNode, 'title')[0] ?? null;
+        $title = $titleNode?->textContent;
+        $text = $styleBlock.$this->renderChildren($sectionNode);
 
-        $annotation = null;
-        /** @var \DOMElement|null $annotationNode */
-        $annotationNode = $sectionNode->getElementsByTagName('annotation')->item(0);
-        if ($annotationNode) {
-            $annotation = $this->makeText($annotationNode);
-        }
+        $annotationNode = self::childElements($sectionNode, 'annotation')[0] ?? null;
+        $annotation = $annotationNode ? $this->renderChildren($annotationNode) : null;
 
         $epigraphs = [];
-        /** @var \DOMElement $epigraphNode */
-        foreach ($sectionNode->getElementsByTagName('epigraph') as $epigraphNode) {
-            $epigraphText = $this->makeText($epigraphNode);
-            if ($epigraphText) {
+        foreach (self::childElements($sectionNode, 'epigraph') as $epigraphNode) {
+            $epigraphText = $this->renderChildren($epigraphNode);
+            if ('' !== $epigraphText) {
                 $authors = [];
-                foreach ($epigraphNode->getElementsByTagName('text-author') as $textAuthorNode) {
-                    $authors[] = $this->makeAuthorText($textAuthorNode);
+                foreach (self::childElements($epigraphNode, 'text-author') as $textAuthorNode) {
+                    $author = \mb_trim($this->renderChildren($textAuthorNode));
+                    if ('' !== $author) {
+                        $authors[] = $author;
+                    }
                 }
                 $epigraphs[] = new Fb2Epigraph($epigraphText, $authors);
             }
         }
 
         return new Fb2Section($id, $text, $title, $annotation, $epigraphs, $this->collectResources($sectionNode));
+    }
+
+    /**
+     * Direct child elements with the given local name (no descent into
+     * subsections, so a section never borrows its children's title/annotation).
+     *
+     * @return list<\DOMElement>
+     */
+    private static function childElements(\DOMElement $node, string $name): array
+    {
+        $elements = [];
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof \DOMElement && $name === \strtolower($child->localName ?? $child->tagName)) {
+                $elements[] = $child;
+            }
+        }
+
+        return $elements;
     }
 
     /**
@@ -102,6 +119,10 @@ final class Fb2Driver extends AbstractDriver
         $seen = [];
         /** @var \DOMElement $imageNode */
         foreach ($sectionNode->getElementsByTagName('image') as $imageNode) {
+            if ($this->hasSectionAncestor($imageNode, $sectionNode)) {
+                continue;
+            }
+
             $ref = $this->getHrefAttribute($imageNode);
             if ('' === $ref || '#' !== $ref[0] || isset($seen[$ref])) {
                 continue;
@@ -141,56 +162,129 @@ final class Fb2Driver extends AbstractDriver
         return '';
     }
 
-    private function makeText(\DOMElement $node, bool $rowFrame = false): string
+    /**
+     * Whether the image sits inside a nested <section>, i.e. belongs to a
+     * section that is emitted on its own.
+     */
+    private function hasSectionAncestor(\DOMElement $imageNode, \DOMElement $sectionNode): bool
     {
-        $text = [];
-        /** @var \DOMElement|\DOMNode|\DOMNameSpaceNode $childNode */
-        foreach ($node->childNodes as $childNode) {
-            if (!$childNode instanceof \DOMElement) {
-                if ($rowFrame) {
-                    $text[] = '<p>'.$childNode->nodeValue.'</p>';
-                } else {
-                    $text[] = $childNode->nodeValue."\n";
-                }
+        for ($node = $imageNode->parentNode; $node instanceof \DOMElement && $node !== $sectionNode; $node = $node->parentNode) {
+            if ('section' === \strtolower($node->localName ?? $node->tagName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Renders an FB2 element (and its subtree) as HTML.
+     */
+    private function renderNode(\DOMElement $node, bool $inPoem = false): string
+    {
+        $tag = \strtolower($node->localName ?? $node->tagName);
+
+        return match ($tag) {
+            'p' => '<p>'.$this->renderChildren($node, $inPoem).'</p>',
+            'subtitle' => $this->renderHeading($node, 'h3'),
+            'cite' => '<blockquote>'.$this->renderChildren($node, $inPoem).'</blockquote>',
+            'poem' => '<div class="poem">'.$this->renderChildren($node, true).'</div>',
+            'stanza' => '<div class="stanza">'.$this->renderChildren($node, true).'</div>',
+            'v' => '<p>'.$this->renderChildren($node, $inPoem).'</p>',
+            'title' => $this->renderHeading($node, $inPoem ? 'h4' : 'h2'),
+            'table' => '<table>'.$this->renderChildren($node, $inPoem).'</table>',
+            'tr' => '<tr>'.$this->renderChildren($node, $inPoem).'</tr>',
+            'td' => '<td>'.$this->renderChildren($node, $inPoem).'</td>',
+            'th' => '<th>'.$this->renderChildren($node, $inPoem).'</th>',
+            'strong' => '<strong>'.$this->renderChildren($node, $inPoem).'</strong>',
+            'emphasis' => '<em>'.$this->renderChildren($node, $inPoem).'</em>',
+            'strikethrough' => '<s>'.$this->renderChildren($node, $inPoem).'</s>',
+            'sub' => '<sub>'.$this->renderChildren($node, $inPoem).'</sub>',
+            'sup' => '<sup>'.$this->renderChildren($node, $inPoem).'</sup>',
+            'code' => '<code>'.$this->renderChildren($node, $inPoem).'</code>',
+            'style' => $this->renderStyle($node, $inPoem),
+            'a' => $this->renderLink($node, $inPoem),
+            'image' => $this->renderImage($node),
+            'empty-line' => '<br/>',
+            // Exposed by getTitle()/getEpigraphs()/getAnnotation() or emitted as
+            // its own section, so it must not be duplicated inside the content.
+            'epigraph', 'annotation', 'text-author', 'section' => '',
+            default => $this->renderChildren($node, $inPoem),
+        };
+    }
+
+    /**
+     * Renders the children of an FB2 node as HTML, escaping text nodes so the
+     * result is a well-formed HTML fragment.
+     */
+    private function renderChildren(\DOMNode $node, bool $inPoem = false): string
+    {
+        $html = '';
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof \DOMElement) {
+                $html .= $this->renderNode($child, $inPoem);
+            } elseif (\XML_TEXT_NODE === $child->nodeType || \XML_CDATA_SECTION_NODE === $child->nodeType) {
+                $html .= \htmlspecialchars($child->nodeValue ?? '', \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+            }
+        }
+
+        return $html;
+    }
+
+    /**
+     * Renders an FB2 <title>/<subtitle> as a heading. Their children are
+     * block-level <p>/<empty-line>, which would be invalid inside a heading, so
+     * the text is flattened to a single line.
+     */
+    private function renderHeading(\DOMElement $node, string $tag): string
+    {
+        $parts = [];
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof \DOMElement) {
+                $value = \mb_trim($child->textContent);
+            } elseif (\XML_TEXT_NODE === $child->nodeType || \XML_CDATA_SECTION_NODE === $child->nodeType) {
+                $value = \mb_trim($child->nodeValue ?? '');
+            } else {
                 continue;
             }
 
-            if (\in_array($childNode->tagName, ['p', 'table', 'strong', 'emphasis', 'style', 'strikethrough', 'sub', 'sup', 'code', 'image'], true)) {
-                $text[] = $node->ownerDocument->saveHTML($childNode);
-            }
-            if ('cite' === $childNode->tagName) {
-                $text[] = '<blockquote>'.$this->makeText($childNode).'</blockquote>';
-            }
-            if ('poem' === $childNode->tagName) {
-                /** @var \DOMElement $stanzaNode */
-                foreach ($childNode->getElementsByTagName('stanza') as $stanzaNode) {
-                    /** @var \DOMElement $vNode */
-                    foreach ($stanzaNode->getElementsByTagName('v') as $vNode) {
-                        $text[] = $this->makeText($vNode, true);
-                    }
-                }
+            if ('' !== $value) {
+                $parts[] = $value;
             }
         }
 
-        return \implode('', $text);
+        $text = \mb_trim(\implode(' ', $parts));
+        if ('' === $text) {
+            return '';
+        }
+
+        return '<'.$tag.'>'.\htmlspecialchars($text, \ENT_QUOTES | \ENT_HTML5, 'UTF-8').'</'.$tag.'>';
     }
 
-    private function makeAuthorText(\DOMElement $textAuthorNode): string
+    private function renderStyle(\DOMElement $node, bool $inPoem): string
     {
-        $author = [];
-        /** @var \DOMElement|\DOMNode|\DOMNameSpaceNode $childNode */
-        foreach ($textAuthorNode->childNodes as $childNode) {
-            $isElement = $childNode instanceof \DOMElement;
-            if ($isElement && \in_array($childNode->tagName, ['strong', 'emphasis', 'style', 'strikethrough', 'sub', 'sup', 'code'], true)) {
-                $author[] = $textAuthorNode->ownerDocument->saveHTML($childNode);
-            }
+        $name = $node->getAttribute('name');
+        $attribute = '' === $name ? '' : ' class="'.\htmlspecialchars($name, \ENT_QUOTES | \ENT_HTML5, 'UTF-8').'"';
 
-            if (!$isElement) {
-                $author[] = $childNode->nodeValue."\n";
-            }
+        return '<span'.$attribute.'>'.$this->renderChildren($node, $inPoem).'</span>';
+    }
+
+    private function renderLink(\DOMElement $node, bool $inPoem): string
+    {
+        $href = $this->getHrefAttribute($node);
+        $attribute = '' === $href ? '' : ' href="'.\htmlspecialchars($href, \ENT_QUOTES | \ENT_HTML5, 'UTF-8').'"';
+
+        return '<a'.$attribute.'>'.$this->renderChildren($node, $inPoem).'</a>';
+    }
+
+    private function renderImage(\DOMElement $node): string
+    {
+        $href = $this->getHrefAttribute($node);
+        if ('' === $href) {
+            return '';
         }
 
-        return \implode(' ', $author);
+        return '<img src="'.\htmlspecialchars($href, \ENT_QUOTES | \ENT_HTML5, 'UTF-8').'"/>';
     }
 
     #[\Override]
