@@ -69,7 +69,7 @@ final class Fb2Driver extends AbstractDriver
         }
 
         $titleNode = self::childElements($sectionNode, 'title')[0] ?? null;
-        $title = $titleNode?->textContent;
+        $title = null === $titleNode ? null : $this->titleText($titleNode);
 
         // The section's own epigraph/annotation are exposed separately, so they
         // are not repeated in the content; an anchor makes in-document links
@@ -249,11 +249,10 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * Renders an FB2 <title>/<subtitle> as a heading. Their children are
-     * block-level <p>/<empty-line>, which would be invalid inside a heading, so
-     * the text is flattened to a single line.
+     * The plain text of an FB2 <title>: its block-level <p> children are joined
+     * with a space (concatenating them directly would glue words together).
      */
-    private function renderHeading(\DOMElement $node, string $tag): string
+    private function titleText(\DOMElement $node): string
     {
         $parts = [];
         foreach ($node->childNodes as $child) {
@@ -270,7 +269,17 @@ final class Fb2Driver extends AbstractDriver
             }
         }
 
-        $text = \mb_trim(\implode(' ', $parts));
+        return \mb_trim(\implode(' ', $parts));
+    }
+
+    /**
+     * Renders an FB2 <title>/<subtitle> as a heading. Their children are
+     * block-level <p>/<empty-line>, which would be invalid inside a heading, so
+     * the text is flattened to a single line.
+     */
+    private function renderHeading(\DOMElement $node, string $tag): string
+    {
+        $text = $this->titleText($node);
         if ('' === $text) {
             return '';
         }
@@ -367,7 +376,8 @@ final class Fb2Driver extends AbstractDriver
                     } elseif ($inBody && 'title' === $reader->name && ('section' === $parent || 'body' === $parent)) {
                         // A section's (or a whole body's) title is an entry, but
                         // not the title of a poem or epigraph.
-                        $title = \mb_trim(\strip_tags($reader->readInnerXml()));
+                        $inner = \preg_replace('~<[^>]+>~', ' ', $reader->readInnerXml()) ?? '';
+                        $title = \mb_trim(\preg_replace('~\s+~', ' ', \html_entity_decode($inner, \ENT_QUOTES | \ENT_HTML5, 'UTF-8')) ?? '');
                         if ('' !== $title) {
                             $sectionIndex = \end($sectionIndexes);
                             $entries[] = new TableOfContentsEntry($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex, null, null);
@@ -578,8 +588,15 @@ final class Fb2Driver extends AbstractDriver
          */
         /** @var \DOMElement|null $isbnNode */
         $isbnNode = $publishNodeInfo->getElementsByTagName('isbn')->item(0);
+        $isbn = $isbnNode?->nodeValue;
+        if (null === $isbn) {
+            return null;
+        }
 
-        return $isbnNode?->nodeValue;
+        // Some books list several ISBNs comma-separated; keep the first.
+        $isbn = \mb_trim(\explode(',', $isbn)[0]);
+
+        return '' === $isbn ? null : $isbn;
     }
 
     protected function makePublisher(\DOMElement $publishNodeInfo): ?string

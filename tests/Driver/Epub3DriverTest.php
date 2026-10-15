@@ -477,6 +477,40 @@ final class Epub3DriverTest extends TestCase
         }
     }
 
+    public function testNavigationGroupEntriesWithoutLinks(): void
+    {
+        $nav = '<?xml version="1.0"?>'
+            .'<html xmlns="http://www.w3.org/1999/xhtml" xmlns:ops="http://www.idpf.org/2007/ops">'
+            .'<head><title>Nav</title></head><body><nav ops:type="toc"><ol>'
+            .'<li><span>Group</span><ol><li><a href="text/chapter.xhtml">Chapter</a></li></ol></li>'
+            .'</ol></nav></body></html>';
+
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+                .'<item id="ch" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'nav.xhtml' => $nav,
+            'text/chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $toc = new Epub3Driver($file)->getTableOfContents();
+
+            self::assertCount(2, $toc);
+            self::assertSame('Group', $toc[0]->getTitle());
+            self::assertNull($toc[0]->getSectionIndex());
+            self::assertSame(1, $toc[0]->getLevel());
+            self::assertSame('Chapter', $toc[1]->getTitle());
+            self::assertSame(2, $toc[1]->getLevel());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testIframeAndPosterReferencesAreResolved(): void
     {
         $file = self::makeEpub([
@@ -551,6 +585,8 @@ final class Epub3DriverTest extends TestCase
         try {
             $driver = new Epub3Driver($file);
             self::assertTrue($driver->isValid());
+            // The package document is not encrypted, so metadata stays readable.
+            self::assertSame('T', $driver->getMeta()->getTitle());
             $this->expectException(EncryptedBookException::class);
             $driver->getSections();
         } finally {
@@ -575,7 +611,7 @@ final class Epub3DriverTest extends TestCase
             $driver = new Epub3Driver($file);
             self::assertTrue($driver->isValid());
             $this->expectException(EncryptedBookException::class);
-            $driver->getMeta();
+            $driver->getSections();
         } finally {
             \unlink($file);
         }

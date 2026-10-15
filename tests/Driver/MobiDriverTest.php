@@ -299,8 +299,16 @@ final class MobiDriverTest extends TestCase
         $driver = new MobiDriver(__DIR__.'/../fixtures/mobi/encrypted.mobi');
         self::assertTrue($driver->isValid());
 
+        // Metadata, TOC and cover live in unencrypted records, so they are read.
+        $meta = $driver->getMeta();
+        self::assertSame('Libmobi test sample', $meta->getTitle());
+        self::assertSame(['Bartek Fabiszewski'], $meta->getAuthors());
+        self::assertNotNull($driver->getCover());
+        self::assertNotEmpty($driver->getTableOfContents());
+
+        // The content itself is encrypted.
         $this->expectException(EncryptedBookException::class);
-        $driver->getMeta();
+        $driver->getSections();
     }
 
     public function testMetaAuthors(): void

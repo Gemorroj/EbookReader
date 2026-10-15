@@ -429,29 +429,29 @@ class MobiDriver extends AbstractDriver
 
         try {
             $palmDbData = $this->parsePalmDb($f);
-            $palmDocData = $this->parsePalmDoc($f);
-            $this->assertNotEncrypted($palmDocData['encryption']);
+            $this->parsePalmDoc($f);
             $mobiData = $this->parseMobiHeader($f);
             $exthData = $this->exthData($f, $mobiData);
 
             $coverOffset = self::coverOffset($exthData);
-            if (null === $coverOffset) {
-                return null;
-            }
+            // Without an EXTH cover, calibre falls back to the first image.
+            $fallback = null === $coverOffset;
+            $recordIndex = $fallback
+                ? $mobiData['first_image_index']
+                : $mobiData['first_image_index'] + $coverOffset;
 
             $fileSize = \filesize($this->getFile());
             if (false === $fileSize) {
                 throw new ParserException();
             }
 
-            $recordIndex = $mobiData['first_image_index'] + $coverOffset;
             if ($recordIndex < 0 || !isset($palmDbData['records'][$recordIndex])) {
                 return null;
             }
 
             $data = $this->readRecord($f, $palmDbData['records'], $recordIndex, $fileSize);
             $mime = $this->getMimeDetector()->detect($data);
-            if (null === $mime) {
+            if (null === $mime || ($fallback && !\str_starts_with($mime, 'image/'))) {
                 return null;
             }
 
@@ -475,8 +475,7 @@ class MobiDriver extends AbstractDriver
 
         try {
             $palmDbData = $this->parsePalmDb($f);
-            $palmDocData = $this->parsePalmDoc($f);
-            $this->assertNotEncrypted($palmDocData['encryption']);
+            $this->parsePalmDoc($f);
             $mobiData = $this->parseMobiHeader($f);
 
             $indexOffset = $mobiData['ncx_index'];
@@ -525,8 +524,7 @@ class MobiDriver extends AbstractDriver
 
         try {
             $palmDbData = $this->parsePalmDb($f);
-            $palmDocData = $this->parsePalmDoc($f);
-            $this->assertNotEncrypted($palmDocData['encryption']);
+            $this->parsePalmDoc($f);
             $mobiData = $this->parseMobiHeader($f);
             $exthData = $this->exthData($f, $mobiData);
 

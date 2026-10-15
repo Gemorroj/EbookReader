@@ -177,6 +177,28 @@ final class Fb2DriverTest extends TestCase
         self::assertNull($meta->getSeriesIndex());
     }
 
+    public function testTitlePartsAreSpaceJoined(): void
+    {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+            .'<description><title-info><book-title>T</book-title>'
+            .'<author><first-name>A</first-name><last-name>B</last-name></author><lang>en</lang></title-info></description>'
+            .'<body><section><title><p>Part One</p><p>Sub</p></title><p>x</p></section></body></FictionBook>';
+
+        $file = \tempnam(\sys_get_temp_dir(), 'fb2');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $xml);
+
+        try {
+            $driver = new Fb2Driver($file);
+
+            self::assertSame('Part One Sub', $driver->getSections()[0]->getTitle());
+            self::assertSame('Part One Sub', $driver->getTableOfContents()[0]->getTitle());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testMetaFallbacksAndTranslator(): void
     {
         $xml = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -456,7 +478,7 @@ final class Fb2DriverTest extends TestCase
             'Во весь голос. Стихотворения и поэмы', // title
             'Владимир Владимирович Маяковский', // author
             'АСТ', // publisher
-            '978-5-17-136765-7, 978-5-17-136763-3', // isbn
+            '978-5-17-136765-7', // isbn
             "<p>Владимир Владимирович Маяковский (1893–1930)\u{a0}– один из крупнейших советских поэтов, новаторское творчество которого имело огромное значение для всей поэзии ХХ века.</p><p>На формирование мировоззрения поэта особенно повлияли демократическая атмосфера, царившая в семье, и первая русская революция. В. Маяковский решил посвятить своё творчество борьбе с существовавшим тогда строем.</p><p>Главной задачей поэт считал – с помощью своих стихов приближать будущее. Назначение поэта – нести свет людям: свет звёзд и свет солнца («Послушайте!», «Необычайное происшествие…»).</p><p>Маяковский – оратор и лирик. Его агитационные и лирические стихи обращены к широким массам и лично к каждому. Поэту необходим задушевный разговор с читателем. («А вы могли бы?», «Скрипка и немножко нервно»).</p><p>В сборник вошли стихотворения и поэмы, написанные в разные годы жизни поэта.</p>", // description
             'ru', // language
             null, // license

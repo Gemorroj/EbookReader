@@ -164,7 +164,7 @@ EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatExcept
 ```
 
 ### Limitations:
-- DRM-protected books are detected and rejected (`EncryptedBookException`); they cannot be read.
+- DRM-protected content cannot be read: `getSections()` throws `EncryptedBookException`. Unencrypted parts are still exposed — metadata, table of contents and cover (e.g. for MOBI, whose records carry them in the clear).
 - Metadata is limited to the fields on `EbookMetaInterface` (no rating or sort keys).
 - EPUB: multiple renditions and `page-progression-direction` are ignored; `linear="no"` items are included as normal sections.
 - HTML: no standard layout — only the ZIP index document is read and the TOC is guessed from headings (h1..h3).

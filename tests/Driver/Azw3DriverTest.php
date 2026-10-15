@@ -82,6 +82,17 @@ final class Azw3DriverTest extends TestCase
         self::assertSame(2, $publishDate->getDay());
     }
 
+    public function testCoverFallsBackToFirstImage(): void
+    {
+        // images-fonts.azw3 has no EXTH cover; calibre falls back to the first
+        // image, so we do too.
+        $cover = new Azw3Driver(self::IMAGES_FONTS)->getCover();
+
+        self::assertNotNull($cover);
+        self::assertStringStartsWith('image/', $cover->getMime());
+        self::assertNotSame('', $cover->getData());
+    }
+
     public function testGetCover(): void
     {
         $cover = new Azw3Driver(self::SVG_COVER)->getCover();

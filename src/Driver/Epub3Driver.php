@@ -68,7 +68,6 @@ final class Epub3Driver extends AbstractDriver
     {
         if (null === $this->packageNode || null === $this->packageDirectory) {
             [$packageNode, $packageDirectory] = $this->parsePackage();
-            $this->assertNotEncrypted();
             $this->packageNode = $packageNode;
             $this->packageDirectory = $packageDirectory;
         }
@@ -523,6 +522,7 @@ final class Epub3Driver extends AbstractDriver
     #[\Override]
     public function getSections(): array
     {
+        $this->assertNotEncrypted();
         $packageNode = $this->getPackageNode();
         $version = (int) Element::attribute($packageNode, 'version');
 
@@ -613,6 +613,7 @@ final class Epub3Driver extends AbstractDriver
     {
         // https://wiki.mobileread.com/wiki/Ebook_Covers
 
+        $this->assertNotEncrypted();
         $packageNode = $this->getPackageNode();
         /** @var \Dom\Element|null $manifestNode */
         $manifestNode = Element::first($packageNode, 'manifest');
@@ -759,6 +760,7 @@ final class Epub3Driver extends AbstractDriver
     #[\Override]
     public function getTableOfContents(): array
     {
+        $this->assertNotEncrypted();
         $packageNode = $this->getPackageNode();
         /** @var \Dom\Element|null $manifestNode */
         $manifestNode = Element::first($packageNode, 'manifest');
@@ -880,6 +882,14 @@ final class Epub3Driver extends AbstractDriver
                     if ('' !== $title) {
                         [$sectionIndex, $anchor] = $this->resolveTarget(Element::attribute($child, 'href'), $baseDir, $spineMap);
                         $entries[] = new TableOfContentsEntry($title, $level, $sectionIndex, $anchor);
+                    }
+                    break;
+                }
+                // Entries without a link are group labels (e.g. an author).
+                if ($child instanceof \Dom\Element && 'span' === $child->localName) {
+                    $title = \mb_trim($child->textContent);
+                    if ('' !== $title) {
+                        $entries[] = new TableOfContentsEntry($title, $level, null, null);
                     }
                     break;
                 }
