@@ -18,6 +18,8 @@
 
 Every format is read through the same interface. `EbookReaderFactory::create()` detects the format automatically; the returned reader exposes metadata, cover, table of contents, content sections and their assets.
 
+A book can be read from a file path, from in-memory content, or from any `BookSource`. In-memory content is materialised into a temporary file, because every driver needs random access to the content; the temporary file lives for as long as the returned reader and is removed with it.
+
 
 ### Requirements:
 - PHP >= 8.4
@@ -42,6 +44,20 @@ use EbookReader\EbookReaderFactory;
 
 $book = EbookReaderFactory::create('book.epub');
 $book->getFormat();                       // EbookReader\Model\Format::EPUB
+
+// From content held in memory (download, stream, database blob, ...):
+$book = EbookReaderFactory::createFromContent($bytes);
+```
+
+A custom source implements `EbookReader\Source\BookSource`:
+
+```php
+use EbookReader\EbookReaderFactory;
+use EbookReader\Source\FileSource;
+use EbookReader\Source\StringSource;
+
+EbookReaderFactory::createFromSource(new FileSource('book.epub'));
+EbookReaderFactory::createFromSource(new StringSource($bytes));
 ```
 
 #### Metadata and cover
@@ -115,8 +131,10 @@ foreach ($book->getTableOfContents() as $entry) { // EbookReader\Model\TableOfCo
 
 #### Drivers and errors
 
-`EbookReaderFactory::create()` throws `UnsupportedFormatException` for an unknown
-format and `FileNotReadableException` for an unreadable file:
+Every factory method throws `UnsupportedFormatException` for an unknown format;
+`create()` additionally throws `FileNotReadableException` for an unreadable file,
+and `createFromContent()` throws `SourceException` when the content cannot be
+materialised into a temporary file:
 
 ```php
 use EbookReader\Driver\Epub3Driver;

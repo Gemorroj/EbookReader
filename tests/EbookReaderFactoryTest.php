@@ -15,6 +15,7 @@ use EbookReader\EbookReaderFactory;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Model\Format;
+use EbookReader\Source\FileSource;
 use EbookReader\Text\TextDecoder;
 use PHPUnit\Framework\TestCase;
 
@@ -152,6 +153,51 @@ final class EbookReaderFactoryTest extends TestCase
         } finally {
             \unlink($file);
         }
+    }
+
+    public function testCreateFromContentTxt(): void
+    {
+        $reader = EbookReaderFactory::createFromContent("Hello\nWorld");
+        self::assertInstanceOf(TxtDriver::class, $reader);
+        self::assertSame("Hello\nWorld", $reader->getSections()[0]->getContent());
+    }
+
+    public function testCreateFromContentEpub(): void
+    {
+        // A ZIP container needs the content to be materialised into a real file
+        // before ZipArchive can read it.
+        $contents = \file_get_contents(__DIR__.'/fixtures/epub/epub3-nav.epub');
+        self::assertNotFalse($contents);
+
+        $reader = EbookReaderFactory::createFromContent($contents);
+        self::assertInstanceOf(Epub3Driver::class, $reader);
+        self::assertNotSame([], $reader->getSections());
+    }
+
+    public function testCreateFromContentMobi(): void
+    {
+        // MOBI reads the raw bytes with random access (SplFileObject).
+        $contents = \file_get_contents(__DIR__.'/fixtures/mobi/palmodoc-cyrillic.mobi');
+        self::assertNotFalse($contents);
+
+        $reader = EbookReaderFactory::createFromContent($contents);
+        self::assertInstanceOf(MobiDriver::class, $reader);
+        self::assertSame('Во весь голос. Стихотворения и поэмы', $reader->getMeta()->getTitle());
+    }
+
+    public function testCreateFromSource(): void
+    {
+        $reader = EbookReaderFactory::createFromSource(new FileSource(__DIR__.'/fixtures/txt/txt-utf8.txt'));
+        self::assertInstanceOf(TxtDriver::class, $reader);
+    }
+
+    public function testCreateFromContentFake(): void
+    {
+        $contents = \file_get_contents(__DIR__.'/fixtures/fake.zip');
+        self::assertNotFalse($contents);
+
+        $this->expectException(UnsupportedFormatException::class);
+        EbookReaderFactory::createFromContent($contents);
     }
 
     public function testCreateFake(): void
