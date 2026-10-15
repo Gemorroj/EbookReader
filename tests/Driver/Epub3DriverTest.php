@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\Epub3Driver;
+use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Model\Format;
@@ -270,6 +271,141 @@ final class Epub3DriverTest extends TestCase
 
         $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $resources);
         self::assertSame($paths, \array_values(\array_unique($paths)));
+    }
+
+    public function testEncryptedContentIsRejected(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'META-INF/encryption.xml' => '<?xml version="1.0"?>'
+                .'<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">'
+                .'<enc:EncryptedData><enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>'
+                .'<enc:CipherData><enc:CipherReference URI="text/chapter.xhtml"/></enc:CipherData>'
+                .'</enc:EncryptedData></encryption>',
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="text/chapter.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'text/chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $driver = new Epub3Driver($file);
+            self::assertTrue($driver->isValid());
+            $this->expectException(EncryptedBookException::class);
+            $driver->getSections();
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testRightsManagedEpubIsRejected(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'META-INF/rights.xml' => '<rights/>',
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $driver = new Epub3Driver($file);
+            self::assertTrue($driver->isValid());
+            $this->expectException(EncryptedBookException::class);
+            $driver->getMeta();
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    /**
+     * The obfuscated font and its plaintext are pre-computed by an independent
+     * implementation, so this checks the key derivation and XOR rather than
+     * comparing the driver against itself.
+     */
+    public function testIdpfObfuscatedFontIsDecrypted(): void
+    {
+        $file = self::makeObfuscatedFontEpub(
+            '<dc:identifier id="bookid">my-unique-id</dc:identifier>',
+            'http://www.idpf.org/2008/embedding',
+            self::fixture('font-idpf-obfuscated.bin')
+        );
+
+        try {
+            self::assertSame(self::fixture('font-idpf-plain.bin'), self::fontData($file));
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testAdobeObfuscatedFontIsDecrypted(): void
+    {
+        $file = self::makeObfuscatedFontEpub(
+            '<dc:identifier id="bookid" opf:scheme="UUID">12345678-1234-1234-1234-123456789abc</dc:identifier>',
+            'http://ns.adobe.com/pdf/enc#RC',
+            self::fixture('font-adobe-obfuscated.bin')
+        );
+
+        try {
+            self::assertSame(self::fixture('font-adobe-plain.bin'), self::fontData($file));
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    private static function makeObfuscatedFontEpub(string $identifier, string $algorithm, string $storedFont): string
+    {
+        $opf = '<?xml version="1.0"?>'
+            .'<package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'.$identifier.'</metadata>'
+            .'<manifest>'
+            .'<item id="ch" href="chapter.xhtml" media-type="application/xhtml+xml"/>'
+            .'<item id="css" href="style.css" media-type="text/css"/>'
+            .'<item id="font" href="fonts/x.ttf" media-type="font/ttf"/>'
+            .'</manifest><spine><itemref idref="ch"/></spine></package>';
+
+        return self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'META-INF/encryption.xml' => '<?xml version="1.0"?>'
+                .'<encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#">'
+                .'<enc:EncryptedData><enc:EncryptionMethod Algorithm="'.$algorithm.'"/>'
+                .'<enc:CipherData><enc:CipherReference URI="fonts/x.ttf"/></enc:CipherData>'
+                .'</enc:EncryptedData></encryption>',
+            'content.opf' => $opf,
+            'chapter.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                .'<link rel="stylesheet" href="style.css"/></head><body>x</body></html>',
+            'style.css' => '@font-face{src:url(fonts/x.ttf)}',
+            'fonts/x.ttf' => $storedFont,
+        ]);
+    }
+
+    private static function fontData(string $file): string
+    {
+        $driver = new Epub3Driver($file);
+        self::assertTrue($driver->isValid());
+
+        foreach ($driver->getSections()[0]->getResources() as $resource) {
+            if ('font' === $resource->getType()->value) {
+                return $resource->getData();
+            }
+        }
+
+        self::fail('No font resource found');
+    }
+
+    private static function fixture(string $name): string
+    {
+        $data = \file_get_contents(__DIR__.'/../fixtures/epub/'.$name);
+        if (false === $data) {
+            self::fail('Missing fixture: '.$name);
+        }
+
+        return $data;
     }
 
     /**

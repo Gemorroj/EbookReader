@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Model\Cover\Cover;
@@ -34,8 +35,25 @@ final class Epub3Driver extends AbstractDriver
      */
     private const array ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
 
+    /**
+     * Font obfuscation algorithms (not DRM): the first bytes of the font are
+     * XORed with a key derived from the book identifier.
+     *
+     * @see https://wiki.mobileread.com/wiki/EPUB#Font_Obfuscation
+     */
+    private const string IDPF_OBFUSCATION = 'http://www.idpf.org/2008/embedding';
+    private const string ADOBE_OBFUSCATION = 'http://ns.adobe.com/pdf/enc#RC';
+
     private ?\Dom\Element $packageNode = null;
     private ?string $packageDirectory = null;
+    private ?string $encryptionXml = null;
+    private bool $rightsManaged = false;
+
+    /** @var list<array{algorithm: string, uri: string}>|null */
+    private ?array $encryptionEntries = null;
+
+    /** @var array<string, string>|null ZIP path => obfuscation algorithm */
+    private ?array $obfuscatedFonts = null;
 
     #[\Override]
     public function getFormat(): Format
@@ -58,10 +76,172 @@ final class Epub3Driver extends AbstractDriver
     private function getPackageNode(): \Dom\Element
     {
         if (null === $this->packageNode || null === $this->packageDirectory) {
-            [$this->packageNode, $this->packageDirectory] = $this->parsePackage();
+            [$packageNode, $packageDirectory] = $this->parsePackage();
+            $this->assertNotEncrypted();
+            $this->packageNode = $packageNode;
+            $this->packageDirectory = $packageDirectory;
         }
 
         return $this->packageNode;
+    }
+
+    /**
+     * Rejects DRM-protected books. Font obfuscation is allowed (and undone when
+     * the fonts are read); any other encryption algorithm, or the presence of an
+     * Adobe/LCP rights file, means the content is encrypted.
+     *
+     * @throws EncryptedBookException
+     */
+    private function assertNotEncrypted(): void
+    {
+        if ($this->rightsManaged) {
+            throw new EncryptedBookException('Encrypted EPUB (rights.xml/license.lcpl) is not supported');
+        }
+
+        foreach ($this->getEncryptionEntries() as $entry) {
+            if (!\in_array($entry['algorithm'], [self::IDPF_OBFUSCATION, self::ADOBE_OBFUSCATION], true)) {
+                throw new EncryptedBookException(\sprintf('Encrypted EPUB (%s) is not supported', '' === $entry['algorithm'] ? 'unknown algorithm' : $entry['algorithm']));
+            }
+        }
+    }
+
+    /**
+     * @return list<array{algorithm: string, uri: string}>
+     */
+    private function getEncryptionEntries(): array
+    {
+        if (null !== $this->encryptionEntries) {
+            return $this->encryptionEntries;
+        }
+
+        $entries = [];
+        if (null !== $this->encryptionXml) {
+            $dom = $this->parseXml($this->encryptionXml);
+            foreach ($dom->getElementsByTagNameNS('*', 'EncryptedData') as $data) {
+                $method = $data->getElementsByTagNameNS('*', 'EncryptionMethod')->item(0);
+                $reference = $data->getElementsByTagNameNS('*', 'CipherReference')->item(0);
+                $entries[] = [
+                    'algorithm' => $method instanceof \Dom\Element ? self::attribute($method, 'Algorithm') : '',
+                    'uri' => $reference instanceof \Dom\Element ? self::attribute($reference, 'URI') : '',
+                ];
+            }
+        }
+
+        return $this->encryptionEntries = $entries;
+    }
+
+    /**
+     * Fonts declared as obfuscated, keyed by their canonical ZIP path. The
+     * CipherReference URIs are relative to the container root.
+     *
+     * @return array<string, string>
+     */
+    private function getObfuscatedFonts(): array
+    {
+        if (null !== $this->obfuscatedFonts) {
+            return $this->obfuscatedFonts;
+        }
+
+        $map = [];
+        foreach ($this->getEncryptionEntries() as $entry) {
+            if ('' === $entry['uri'] || !\in_array($entry['algorithm'], [self::IDPF_OBFUSCATION, self::ADOBE_OBFUSCATION], true)) {
+                continue;
+            }
+            $map[$this->resolveZipPath($entry['uri'], '')] = $entry['algorithm'];
+        }
+
+        return $this->obfuscatedFonts = $map;
+    }
+
+    /**
+     * The 20-byte IDPF key (SHA-1 of the unique identifier, whitespace removed)
+     * or the 16-byte Adobe key (the UUID identifier), or null when unavailable.
+     */
+    private function deobfuscationKey(string $algorithm): ?string
+    {
+        if (self::IDPF_OBFUSCATION === $algorithm) {
+            $identifier = $this->uniqueIdentifier();
+            if (null === $identifier) {
+                return null;
+            }
+
+            return \sha1(\preg_replace('~[ \t\r\n]~', '', $identifier) ?? $identifier, true);
+        }
+
+        return $this->adobeIdentifierKey();
+    }
+
+    private function uniqueIdentifier(): ?string
+    {
+        $packageNode = $this->getPackageNode();
+        $id = self::attribute($packageNode, 'unique-identifier');
+        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        if ('' === $id || !$metadataNode instanceof \Dom\Element) {
+            return null;
+        }
+
+        foreach ($metadataNode->getElementsByTagNameNS('*', 'identifier') as $node) {
+            if ($id === self::attribute($node, 'id')) {
+                return $node->textContent;
+            }
+        }
+
+        return null;
+    }
+
+    private function adobeIdentifierKey(): ?string
+    {
+        $packageNode = $this->getPackageNode();
+        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        if (!$metadataNode instanceof \Dom\Element) {
+            return null;
+        }
+
+        foreach ($metadataNode->getElementsByTagNameNS('*', 'identifier') as $node) {
+            $text = $node->textContent;
+            $isUuid = \str_starts_with($text, 'urn:uuid:');
+            foreach ($node->attributes as $attribute) {
+                if (\str_ends_with(\strtolower($attribute->localName), 'scheme') && 'uuid' === \strtolower($attribute->value)) {
+                    $isUuid = true;
+                }
+            }
+            if (!$isUuid) {
+                continue;
+            }
+
+            $position = \strrpos($text, ':');
+            $uuid = false === $position ? $text : \substr($text, $position + 1);
+            $hex = \preg_replace('~[^0-9a-fA-F]~', '', $uuid) ?? '';
+            if (32 !== \strlen($hex)) {
+                continue;
+            }
+            $binary = \hex2bin($hex);
+            if (false !== $binary) {
+                return $binary;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * XORs the first bytes of the font with the key (encryption and decryption
+     * are the same operation).
+     */
+    private static function deobfuscateFont(string $data, string $key, string $algorithm): string
+    {
+        $keyLength = \strlen($key);
+        if (0 === $keyLength) {
+            return $data;
+        }
+
+        $cryptLength = self::ADOBE_OBFUSCATION === $algorithm ? 1024 : 1040;
+        $length = \min(\strlen($data), $cryptLength);
+        for ($i = 0; $i < $length; ++$i) {
+            $data[$i] = \chr(\ord($data[$i]) ^ \ord($key[$i % $keyLength]));
+        }
+
+        return $data;
     }
 
     /**
@@ -165,6 +345,15 @@ final class Epub3Driver extends AbstractDriver
             $content = $zip->getFromName($item['path']);
             if (false === $content) {
                 continue;
+            }
+
+            $obfuscation = $this->getObfuscatedFonts()[$item['path']] ?? null;
+            if (null !== $obfuscation) {
+                $key = $this->deobfuscationKey($obfuscation);
+                if (null === $key) {
+                    throw new ParserException('Missing font obfuscation key');
+                }
+                $content = self::deobfuscateFont($content, $key, $obfuscation);
             }
 
             $path = $item['path'];
@@ -728,6 +917,11 @@ final class Epub3Driver extends AbstractDriver
             if (false === $package) {
                 throw new ParserException();
             }
+
+            $encryption = $zip->getFromName('META-INF/encryption.xml');
+            $this->encryptionXml = false === $encryption ? null : $encryption;
+            $this->rightsManaged = false !== $zip->getFromName('META-INF/rights.xml')
+                || false !== $zip->getFromName('META-INF/license.lcpl');
         } finally {
             $zip->close();
         }
