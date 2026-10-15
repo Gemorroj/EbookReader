@@ -8,8 +8,8 @@ use EbookReader\Driver\MobiDriver;
 use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedCompressionException;
-use EbookReader\Format;
-use EbookReader\Section\MobiSection;
+use EbookReader\Model\Format;
+use EbookReader\Model\Section\MobiSection;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

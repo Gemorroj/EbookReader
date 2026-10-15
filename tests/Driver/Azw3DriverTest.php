@@ -6,9 +6,9 @@ namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\MobiDriver;
-use EbookReader\Format;
-use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Section\Azw3Section;
+use EbookReader\Model\Format;
+use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Section\Azw3Section;
 use PHPUnit\Framework\TestCase;
 
 final class Azw3DriverTest extends TestCase

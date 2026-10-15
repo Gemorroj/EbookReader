@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\HtmlDriver;
-use EbookReader\Format;
-use EbookReader\Resource\EbookResourceInterface;
-use EbookReader\Section\HtmlSection;
+use EbookReader\Model\Format;
+use EbookReader\Model\Resource\EbookResourceInterface;
+use EbookReader\Model\Section\HtmlSection;
 use PHPUnit\Framework\TestCase;
 
 final class HtmlDriverTest extends TestCase
@@ -255,6 +255,23 @@ final class HtmlDriverTest extends TestCase
             $cover = new HtmlDriver($file)->getCover();
             self::assertNotNull($cover);
             self::assertSame('image/png', $cover->getMime());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testZipCoverHrefMissingFallsBackToNull(): void
+    {
+        $file = self::makeZip([
+            'index.html' => '<html><body>x</body></html>',
+            'metadata.opf' => '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+                .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>'
+                .'<manifest><item id="cov" href="missing.jpg" media-type="image/jpeg"/></manifest>'
+                .'<meta name="cover" content="cov"/></package>',
+        ]);
+
+        try {
+            self::assertNull(new HtmlDriver($file)->getCover());
         } finally {
             \unlink($file);
         }

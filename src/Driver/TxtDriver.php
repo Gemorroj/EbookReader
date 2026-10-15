@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Cover\Cover;
 use EbookReader\Exception\ParserException;
-use EbookReader\Format;
-use EbookReader\Meta\OpfMeta;
-use EbookReader\Meta\TxtMeta;
-use EbookReader\Section\TxtSection;
-use EbookReader\TableOfContents\TableOfContents;
+use EbookReader\Model\Cover\Cover;
+use EbookReader\Model\Format;
+use EbookReader\Model\Meta\OpfMeta;
+use EbookReader\Model\Meta\TxtMeta;
+use EbookReader\Model\Section\TxtSection;
+use EbookReader\Model\TableOfContents\TableOfContents;
 
 /**
  * Plain text (a .txt file, or a "txtz": text files inside a ZIP, optionally with
@@ -83,7 +83,8 @@ final class TxtDriver extends AbstractDriver
         }
 
         try {
-            $opf = OpfMeta::fromArchive($zip);
+            $content = $zip->getFromName('metadata.opf');
+            $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
 
             $names = [];
             $coverHref = $opf->getCoverHref();
@@ -134,15 +135,16 @@ final class TxtDriver extends AbstractDriver
     #[\Override]
     public function getMeta(): TxtMeta
     {
-        $opf = new OpfMeta();
+        $content = false;
         $zip = $this->openZip();
         if (null !== $zip) {
             try {
-                $opf = OpfMeta::fromArchive($zip);
+                $content = $zip->getFromName('metadata.opf');
             } finally {
                 $zip->close();
             }
         }
+        $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
 
         $title = $opf->getTitle();
         if ('' === $title) {

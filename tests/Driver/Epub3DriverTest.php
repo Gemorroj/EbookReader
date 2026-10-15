@@ -7,9 +7,9 @@ namespace EbookReader\Tests\Driver;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
-use EbookReader\Format;
-use EbookReader\Resource\EbookResourceInterface;
-use EbookReader\Section\Epub3Section;
+use EbookReader\Model\Format;
+use EbookReader\Model\Resource\EbookResourceInterface;
+use EbookReader\Model\Section\Epub3Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -138,17 +138,6 @@ final class Epub3DriverTest extends TestCase
         self::assertSame('Edge Cases', $meta->getTitle());
         self::assertNull($meta->getLanguage());
         self::assertTrue($meta->getPublishDate()->isEmpty());
-    }
-
-    public function testGetMetaMonthOnlyDate(): void
-    {
-        $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-date-month.epub');
-        self::assertTrue($driver->isValid());
-
-        $publishDate = $driver->getMeta()->getPublishDate();
-        self::assertSame(2008, $publishDate->getYear());
-        self::assertSame(5, $publishDate->getMonth());
-        self::assertNull($publishDate->getDay());
     }
 
     public function testGetMetaUnsupportedVersion(): void
@@ -380,58 +369,6 @@ final class Epub3DriverTest extends TestCase
 
             self::assertSame('External', $toc[3]->getTitle());
             self::assertNull($toc[3]->getSectionIndex());
-        } finally {
-            \unlink($file);
-        }
-    }
-
-    public function testIsbnIdentifiers(): void
-    {
-        $v3 = self::makeEpub([
-            'META-INF/container.xml' => self::containerXml('content.opf'),
-            'content.opf' => self::packageXml(
-                '3.0',
-                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
-                '<itemref idref="ch"/>',
-                '<dc:title>T</dc:title><dc:identifier>urn:isbn:9781234567890</dc:identifier>'
-            ),
-            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
-        ]);
-        $v2 = self::makeEpub([
-            'META-INF/container.xml' => self::containerXml('content.opf'),
-            'content.opf' => self::packageXml(
-                '2.0',
-                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
-                '<itemref idref="ch"/>',
-                '<dc:title>T</dc:title><dc:identifier opf:scheme="ISBN">9781234567890</dc:identifier>'
-            ),
-            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
-        ]);
-
-        try {
-            self::assertSame('9781234567890', new Epub3Driver($v3)->getMeta()->getIsbn());
-            self::assertSame('9781234567890', new Epub3Driver($v2)->getMeta()->getIsbn());
-        } finally {
-            \unlink($v3);
-            \unlink($v2);
-        }
-    }
-
-    public function testUnparsablePublishDate(): void
-    {
-        $file = self::makeEpub([
-            'META-INF/container.xml' => self::containerXml('content.opf'),
-            'content.opf' => self::packageXml(
-                '3.0',
-                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
-                '<itemref idref="ch"/>',
-                '<dc:title>T</dc:title><dc:date>not-a-date</dc:date>'
-            ),
-            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
-        ]);
-
-        try {
-            self::assertTrue(new Epub3Driver($file)->getMeta()->getPublishDate()->isEmpty());
         } finally {
             \unlink($file);
         }

@@ -6,9 +6,9 @@ namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Exception\ParserException;
-use EbookReader\Format;
-use EbookReader\Section\Fb2Epigraph;
-use EbookReader\Section\Fb2Section;
+use EbookReader\Model\Format;
+use EbookReader\Model\Section\Fb2Epigraph;
+use EbookReader\Model\Section\Fb2Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

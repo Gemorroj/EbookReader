@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Cover\Cover;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
-use EbookReader\Format;
-use EbookReader\Meta\Epub3Meta;
-use EbookReader\Meta\PublishDate;
-use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Resource\ResourceType;
-use EbookReader\Section\Epub3Section;
-use EbookReader\TableOfContents\TableOfContents;
+use EbookReader\Model\Cover\Cover;
+use EbookReader\Model\Format;
+use EbookReader\Model\Meta\Epub3Meta;
+use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Resource\ResourceType;
+use EbookReader\Model\Section\Epub3Section;
+use EbookReader\Model\TableOfContents\TableOfContents;
 
 /**
  * @see https://www.w3.org/publishing/epub3/epub-spec.html
@@ -684,207 +683,23 @@ final class Epub3Driver extends AbstractDriver
         if (!\in_array($version, [2, 3], true)) {
             throw new UnsupportedFormatException();
         }
-        /** @var \Dom\Element|null $metadataNode */
-        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
-        if (!$metadataNode instanceof \Dom\Element) {
+        if (!$packageNode->getElementsByTagNameNS('*', 'metadata')->item(0) instanceof \Dom\Element) {
             throw new ParserException();
         }
 
-        $title = $this->makeTitle($metadataNode);
-        $authors = $this->makeAuthors($metadataNode);
-        $publisher = $this->makePublisher($metadataNode);
-        $isbn = $this->makeIsbn($metadataNode, $version);
-        $description = $this->makeDescription($metadataNode);
-        $language = $this->makeLanguage($metadataNode);
-        $license = $this->makeLicense($metadataNode);
-        $publishDate = $this->makePublishDate($metadataNode);
-        $subjects = $this->makeSubjects($metadataNode);
+        $meta = OpfReader::metadata($packageNode);
 
         return new Epub3Meta(
-            title: $title,
-            authors: $authors,
-            publisher: $publisher,
-            isbn: $isbn,
-            description: $description,
-            language: $language,
-            subjects: $subjects,
-            license: $license,
-            publishDate: $publishDate,
+            title: $meta->getTitle(),
+            authors: $meta->getAuthors(),
+            publisher: $meta->getPublisher(),
+            isbn: $meta->getIsbn(),
+            description: $meta->getDescription(),
+            language: $meta->getLanguage(),
+            subjects: $meta->getSubjects(),
+            license: $meta->getLicense(),
+            publishDate: $meta->getPublishDate(),
         );
-    }
-
-    /**
-     * @return string[]
-     */
-    protected function makeSubjects(\Dom\Element $metadataNode): array
-    {
-        $subjects = [];
-        /** @var \Dom\Element $subjectNode */
-        foreach ($metadataNode->getElementsByTagNameNS('*', 'subject') as $subjectNode) {
-            $value = \mb_trim($subjectNode->textContent);
-            if ('' !== $value) {
-                $subjects[] = $value;
-            }
-        }
-
-        return $subjects;
-    }
-
-    /**
-     * dc:date per W3CDTF/ISO 8601: YYYY, YYYY-MM, YYYY-MM-DD or full date-time.
-     */
-    protected function makePublishDate(\Dom\Element $metadataNode): PublishDate
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcdate
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.7
-
-        /** @var \Dom\Element|null $dateNode */
-        $dateNode = $metadataNode->getElementsByTagNameNS('*', 'date')->item(0);
-
-        if (!$dateNode) {
-            return new PublishDate();
-        }
-
-        $dateStr = \trim($dateNode->textContent);
-        if ('' === $dateStr) {
-            return new PublishDate();
-        }
-
-        if (\preg_match('/^(\d{4})$/', $dateStr, $matches)) {
-            return new PublishDate((int) $matches[1]);
-        }
-
-        if (\preg_match('/^(\d{4})-(\d{1,2})$/', $dateStr, $matches)) {
-            return new PublishDate((int) $matches[1], (int) $matches[2]);
-        }
-
-        try {
-            $obj = new \DateTimeImmutable($dateStr, new \DateTimeZone('UTC'));
-        } catch (\Throwable) {
-            return new PublishDate();
-        }
-
-        return new PublishDate((int) $obj->format('Y'), (int) $obj->format('m'), (int) $obj->format('d'));
-    }
-
-    protected function makeLicense(\Dom\Element $metadataNode): ?string
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.15
-
-        /** @var \Dom\Element|null $rightsNode */
-        $rightsNode = $metadataNode->getElementsByTagNameNS('*', 'rights')->item(0);
-
-        if ($rightsNode) {
-            return $rightsNode->textContent;
-        }
-
-        return null;
-    }
-
-    protected function makeLanguage(\Dom\Element $metadataNode): ?string
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dclanguage
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.12
-
-        /** @var \Dom\Element|null $languageNode */
-        $languageNode = $metadataNode->getElementsByTagNameNS('*', 'language')->item(0);
-
-        return $languageNode?->textContent;
-    }
-
-    protected function makeDescription(\Dom\Element $metadataNode): ?string
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.4
-
-        /** @var \Dom\Element|null $descriptionNode */
-        $descriptionNode = $metadataNode->getElementsByTagNameNS('*', 'description')->item(0);
-
-        if ($descriptionNode) {
-            return \mb_trim($descriptionNode->textContent);
-        }
-
-        return null;
-    }
-
-    protected function makeIsbn(\Dom\Element $metadataNode, int $version): ?string
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcidentifier
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.10
-
-        $identifierNodeList = $metadataNode->getElementsByTagNameNS('*', 'identifier');
-
-        if (3 === $version) {
-            /** @var \Dom\Element $identifierNode */
-            foreach ($identifierNodeList as $identifierNode) {
-                $identifier = $identifierNode->textContent;
-                if (\str_starts_with($identifier, 'urn:isbn:')) {
-                    return \substr($identifier, 9);
-                }
-            }
-        } elseif (2 === $version) {
-            /** @var \Dom\Element $identifierNode */
-            foreach ($identifierNodeList as $identifierNode) {
-                $scheme = self::attribute($identifierNode, 'opf:scheme');
-                if ('ISBN' === $scheme) {
-                    return $identifierNode->textContent;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    protected function makePublisher(\Dom\Element $metadataNode): ?string
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dcmes-optional-def
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.5
-
-        /** @var \Dom\Element|null $publisherNode */
-        $publisherNode = $metadataNode->getElementsByTagNameNS('*', 'publisher')->item(0);
-
-        if ($publisherNode) {
-            return $publisherNode->textContent;
-        }
-
-        return null;
-    }
-
-    protected function makeTitle(\Dom\Element $metadataNode): string
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dctitle
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.1
-
-        $titleNodeList = $metadataNode->getElementsByTagNameNS('*', 'title');
-
-        $titles = [];
-        /** @var \Dom\Element $titleNode */
-        foreach ($titleNodeList as $titleNode) {
-            $titles[] = $titleNode->textContent;
-        }
-
-        return \implode(', ', $titles);
-    }
-
-    /**
-     * @return string[]
-     */
-    protected function makeAuthors(\Dom\Element $metadataNode): array
-    {
-        // 3 - https://www.w3.org/publishing/epub3/epub-packages.html#sec-opf-dccreator
-        // 2 - http://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm#Section2.2.2
-
-        $authors = $allAuthors = [];
-        /** @var \Dom\Element $creatorNode */
-        foreach ($metadataNode->getElementsByTagNameNS('*', 'creator') as $creatorNode) {
-            $allAuthors[] = $creatorNode->textContent;
-            if ('aut' === self::attribute($creatorNode, 'opf:role')) {
-                $authors[] = $creatorNode->textContent;
-            }
-        }
-
-        return $authors ?: $allAuthors;
     }
 
     /**

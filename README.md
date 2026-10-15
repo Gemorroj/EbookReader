@@ -40,13 +40,13 @@ The format is detected automatically:
 use EbookReader\EbookReaderFactory;
 
 $book = EbookReaderFactory::create('book.epub');
-$book->getFormat();                       // EbookReader\Format::EPUB
+$book->getFormat();                       // EbookReader\Model\Format::EPUB
 ```
 
 #### Metadata and cover
 
 ```php
-$meta = $book->getMeta();                 // EbookReader\Meta\EbookMetaInterface
+$meta = $book->getMeta();                 // EbookReader\Model\Meta\EbookMetaInterface
 $meta->getTitle();
 $meta->getAuthor();                       // authors joined by ", "
 $meta->getAuthors();                      // string[]
@@ -55,9 +55,9 @@ $meta->getPublisher();
 $meta->getLanguage();
 $meta->getIsbn();
 $meta->getDescription();
-$meta->getPublishDate();                  // EbookReader\Meta\PublishDate (getYear/getMonth/getDay/isEmpty)
+$meta->getPublishDate();                  // EbookReader\Model\Meta\PublishDate (getYear/getMonth/getDay/isEmpty)
 
-$cover = $book->getCover();               // ?EbookReader\Cover\EbookCoverInterface
+$cover = $book->getCover();               // ?EbookReader\Model\Cover\EbookCoverInterface
 if (null !== $cover) {
     file_put_contents('cover', $cover->getData());
     $cover->getMime();                    // e.g. "image/jpeg"
@@ -71,7 +71,7 @@ asset references are normalized to `Resource::getPath()`. All text — content,
 titles and metadata — is returned as UTF-8:
 
 ```php
-foreach ($book->getSections() as $section) {   // EbookReader\Section\EbookSectionInterface
+foreach ($book->getSections() as $section) {   // EbookReader\Model\Section\EbookSectionInterface
     $section->getId();                         // stable id, e.g. "EPUB/text/ch01.xhtml"
     $section->getTitle();                      // title of the section, or null
     $section->getMediaType();                  // "application/xhtml+xml" | "text/html" | "text/plain"
@@ -79,9 +79,9 @@ foreach ($book->getSections() as $section) {   // EbookReader\Section\EbookSecti
 
     // assets referenced by this section (images, fonts, stylesheets, ...)
     foreach ($section->getResources() as $resource) {
-        // EbookReader\Resource\EbookResourceInterface
+        // EbookReader\Model\Resource\EbookResourceInterface
         $resource->getPath();                  // matches the reference inside getContent()
-        $resource->getType();                  // EbookReader\Resource\ResourceType
+        $resource->getType();                  // EbookReader\Model\Resource\ResourceType
         $resource->getMime();
         $resource->getData();
     }
@@ -93,7 +93,7 @@ foreach ($book->getSections() as $section) {   // EbookReader\Section\EbookSecti
 Every asset of the book at once, de-duplicated by path:
 
 ```php
-foreach ($book->getResources() as $resource) { // EbookReader\Resource\EbookResourceInterface[]
+foreach ($book->getResources() as $resource) { // EbookReader\Model\Resource\EbookResourceInterface[]
     $dir = $resource->getType()->value;        // "image", "font", "style", "audio", "video", "other"
     mkdir($dir, 0777, true);
     file_put_contents($dir.'/'.basename($resource->getPath()), $resource->getData());
@@ -103,7 +103,7 @@ foreach ($book->getResources() as $resource) { // EbookReader\Resource\EbookReso
 #### Table of contents
 
 ```php
-foreach ($book->getTableOfContents() as $entry) { // EbookReader\TableOfContents\TableOfContents[]
+foreach ($book->getTableOfContents() as $entry) { // EbookReader\Model\TableOfContents\TableOfContents[]
     echo str_repeat('  ', $entry->getLevel() - 1).$entry->getTitle();
 
     $entry->getSectionIndex();   // index into getSections(), or null

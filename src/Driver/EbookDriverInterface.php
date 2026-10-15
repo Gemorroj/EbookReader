@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Cover\EbookCoverInterface;
-use EbookReader\Format;
-use EbookReader\Meta\EbookMetaInterface;
-use EbookReader\Resource\EbookResourceInterface;
-use EbookReader\Section\EbookSectionInterface;
-use EbookReader\TableOfContents\TableOfContents;
+use EbookReader\Model\Cover\EbookCoverInterface;
+use EbookReader\Model\Format;
+use EbookReader\Model\Meta\EbookMetaInterface;
+use EbookReader\Model\Resource\EbookResourceInterface;
+use EbookReader\Model\Section\EbookSectionInterface;
+use EbookReader\Model\TableOfContents\TableOfContents;
 
 interface EbookDriverInterface
 {

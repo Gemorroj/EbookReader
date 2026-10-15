@@ -6,7 +6,7 @@ namespace EbookReader\Driver;
 
 use EbookReader\MimeDetector\MimeDetector;
 use EbookReader\MimeDetector\MimeDetectorInterface;
-use EbookReader\Resource\EbookResourceInterface;
+use EbookReader\Model\Resource\EbookResourceInterface;
 use EbookReader\Text\TextDecoder;
 use EbookReader\Text\TextDecoderInterface;
 

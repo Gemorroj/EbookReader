@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Cover\Cover;
 use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\HuffCdic;
 use EbookReader\Decompressor\NoCompression;
@@ -14,12 +13,13 @@ use EbookReader\Driver\Mobi\Index;
 use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedCompressionException;
-use EbookReader\Format;
-use EbookReader\Meta\MobiMeta;
-use EbookReader\Meta\PublishDate;
-use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Section\MobiSection;
-use EbookReader\TableOfContents\TableOfContents;
+use EbookReader\Model\Cover\Cover;
+use EbookReader\Model\Format;
+use EbookReader\Model\Meta\MobiMeta;
+use EbookReader\Model\Meta\PublishDate;
+use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Section\MobiSection;
+use EbookReader\Model\TableOfContents\TableOfContents;
 
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI

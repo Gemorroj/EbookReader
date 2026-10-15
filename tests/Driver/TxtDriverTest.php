@@ -6,8 +6,8 @@ namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\TxtDriver;
 use EbookReader\Exception\ParserException;
-use EbookReader\Format;
-use EbookReader\Section\TxtSection;
+use EbookReader\Model\Format;
+use EbookReader\Model\Section\TxtSection;
 use EbookReader\Text\TextDecoder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

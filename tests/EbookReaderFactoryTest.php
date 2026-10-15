@@ -13,7 +13,7 @@ use EbookReader\Driver\TxtDriver;
 use EbookReader\EbookReaderFactory;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
-use EbookReader\Format;
+use EbookReader\Model\Format;
 use EbookReader\Text\TextDecoder;
 use PHPUnit\Framework\TestCase;
 

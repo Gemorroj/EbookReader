@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Cover\Cover;
 use EbookReader\Exception\ParserException;
-use EbookReader\Format;
-use EbookReader\Meta\HtmlMeta;
-use EbookReader\Meta\OpfMeta;
-use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Resource\ResourceType;
-use EbookReader\Section\HtmlSection;
-use EbookReader\TableOfContents\TableOfContents;
+use EbookReader\Model\Cover\Cover;
+use EbookReader\Model\Format;
+use EbookReader\Model\Meta\HtmlMeta;
+use EbookReader\Model\Meta\OpfMeta;
+use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Resource\ResourceType;
+use EbookReader\Model\Section\HtmlSection;
+use EbookReader\Model\TableOfContents\TableOfContents;
 
 /**
  * Plain HTML documents: a single .html/.htm/.xhtml file, or an "htmlz" (a ZIP
@@ -78,7 +78,8 @@ final class HtmlDriver extends AbstractDriver
         }
 
         try {
-            $opf = OpfMeta::fromArchive($zip);
+            $content = $zip->getFromName('metadata.opf');
+            $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
 
             $names = [];
             $coverHref = $opf->getCoverHref();
@@ -143,15 +144,16 @@ final class HtmlDriver extends AbstractDriver
     #[\Override]
     public function getMeta(): HtmlMeta
     {
-        $opf = new OpfMeta();
+        $content = false;
         $zip = $this->openZip();
         if (null !== $zip) {
             try {
-                $opf = OpfMeta::fromArchive($zip);
+                $content = $zip->getFromName('metadata.opf');
             } finally {
                 $zip->close();
             }
         }
+        $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
 
         $title = $opf->getTitle();
         if ('' === $title) {

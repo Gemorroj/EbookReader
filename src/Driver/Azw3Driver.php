@@ -8,10 +8,10 @@ use EbookReader\Driver\Mobi\Font;
 use EbookReader\Driver\Mobi\Index;
 use EbookReader\Driver\Mobi\Kf8;
 use EbookReader\Exception\ParserException;
-use EbookReader\Format;
-use EbookReader\Resource\Resource as EbookResource;
-use EbookReader\Section\Azw3Section;
-use EbookReader\TableOfContents\TableOfContents;
+use EbookReader\Model\Format;
+use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Section\Azw3Section;
+use EbookReader\Model\TableOfContents\TableOfContents;
 
 /**
  * Kindle Format 8 (AZW3/KF8).
