@@ -228,7 +228,7 @@ final class Index
             return $data;
         }
 
-        return \mb_convert_encoding($data, 'UTF-8', 1252 === $codec ? 'Windows-1252' : 'ISO-8859-1');
+        return \mb_convert_encoding($data, 'UTF-8', 'Windows-1252');
     }
 
     private static function countBits(int $value): int

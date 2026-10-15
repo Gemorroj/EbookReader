@@ -305,7 +305,7 @@ final class Azw3Driver extends MobiDriver
         $f->fseek($record0);
         $this->parsePalmDoc($f);
         $mobi6 = $this->parseMobiHeader($f);
-        $exth = $this->parseExth($f);
+        $exth = $this->exthData($f, $mobi6);
 
         $base = $exth['kf8_header'];
         if (null === $base || $base < 1 || $base >= $count) {

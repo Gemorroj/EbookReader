@@ -42,7 +42,6 @@ class MobiDriver extends AbstractDriver
             $palmDbData = $this->parsePalmDb($f);
             $this->parsePalmDoc($f);
             $this->parseMobiHeader($f);
-            $this->parseExth($f);
             if ($this->isKf8($f, $palmDbData)) {
                 return false;
             }
@@ -72,7 +71,6 @@ class MobiDriver extends AbstractDriver
             $palmDocData = $this->parsePalmDoc($f);
             $this->assertNotEncrypted($palmDocData['encryption']);
             $mobiData = $this->parseMobiHeader($f);
-            $this->parseExth($f);
 
             $decompressor = $this->createDecompressor($f, $palmDbData['records'], $mobiData, $palmDocData['compression']);
 
@@ -161,7 +159,7 @@ class MobiDriver extends AbstractDriver
     {
         $text = \preg_replace_callback(
             '~<(?:img|source)\b[^>]*>~i',
-            static fn (array $matches): string => \preg_replace('~\brecindex\s*=\s*("?)(\d+)\1~i', 'src="$2"', $matches[0]) ?? $matches[0],
+            static fn (array $matches): string => self::normalizeImageTag($matches[0]),
             $text
         ) ?? $text;
 
@@ -177,14 +175,37 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                          $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
+     * Rewrites a MOBI image reference (`hirecindex` > `recindex` > `lowrecindex`)
+     * to `src`, so it points at the resource path.
+     */
+    private static function normalizeImageTag(string $tag): string
+    {
+        $index = null;
+        foreach (['hirecindex', 'recindex', 'lowrecindex'] as $attribute) {
+            if (1 === \preg_match('~\b'.$attribute.'\s*=\s*("?)(\d+)\1~i', $tag, $matches)) {
+                $index = $matches[2];
+                break;
+            }
+        }
+
+        if (null === $index) {
+            return $tag;
+        }
+
+        $tag = \preg_replace('~\s*\b(?:lowrecindex|recindex|hirecindex)\s*=\s*("?)\d+\1~i', '', $tag) ?? $tag;
+
+        return \preg_replace('~^<(img|source)\b~i', '<$1 src="'.$index.'"', $tag) ?? $tag;
+    }
+
+    /**
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                                           $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int, exth_flags: int} $mobiData
      *
      * @return list<EbookResource>
      */
     private function collectResources(\SplFileObject $f, array $records, array $mobiData, string $text, int $fileSize): array
     {
-        if (!\preg_match_all('~recindex="(\d+)"~i', $text, $matches)) {
+        if (!\preg_match_all('~(?:lowrecindex|recindex|hirecindex)\s*=\s*"?(\d+)"?~i', $text, $matches)) {
             return [];
         }
 
@@ -221,7 +242,8 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * MOBI text encoding: 65001 = UTF-8, 1252 = Windows-1252, anything else falls back to Latin-1.
+     * MOBI text encoding: 65001 = UTF-8, anything else falls back to
+     * Windows-1252 (the MOBI default, matching calibre).
      */
     protected function decodeText(string $data, int $encoding): string
     {
@@ -229,7 +251,7 @@ class MobiDriver extends AbstractDriver
             return $data;
         }
 
-        return \mb_convert_encoding($data, 'UTF-8', 1252 === $encoding ? 'Windows-1252' : 'ISO-8859-1');
+        return \mb_convert_encoding($data, 'UTF-8', 'Windows-1252');
     }
 
     private function decodeNullable(?string $data, int $encoding): ?string
@@ -240,8 +262,8 @@ class MobiDriver extends AbstractDriver
     /**
      * PalmDOC is self-contained; HUFF/CDIC needs the HUFF + CDIC records read from the PDB.
      *
-     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                          $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                                           $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int, exth_flags: int} $mobiData
      */
     protected function createDecompressor(\SplFileObject $f, array $records, array $mobiData, int $compression): DecompressorInterface
     {
@@ -254,8 +276,8 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                          $records
-     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                                           $records
+     * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int, exth_flags: int} $mobiData
      */
     private function makeHuffCdic(\SplFileObject $f, array $records, array $mobiData): HuffCdic
     {
@@ -409,9 +431,9 @@ class MobiDriver extends AbstractDriver
             $palmDocData = $this->parsePalmDoc($f);
             $this->assertNotEncrypted($palmDocData['encryption']);
             $mobiData = $this->parseMobiHeader($f);
-            $exthData = $this->parseExth($f);
+            $exthData = $this->exthData($f, $mobiData);
 
-            $coverOffset = $exthData['coveroffset'];
+            $coverOffset = self::coverOffset($exthData);
             if (null === $coverOffset) {
                 return null;
             }
@@ -422,7 +444,7 @@ class MobiDriver extends AbstractDriver
             }
 
             $recordIndex = $mobiData['first_image_index'] + $coverOffset;
-            if ($recordIndex <= 0 || !isset($palmDbData['records'][$recordIndex])) {
+            if ($recordIndex < 0 || !isset($palmDbData['records'][$recordIndex])) {
                 return null;
             }
 
@@ -505,7 +527,7 @@ class MobiDriver extends AbstractDriver
             $palmDocData = $this->parsePalmDoc($f);
             $this->assertNotEncrypted($palmDocData['encryption']);
             $mobiData = $this->parseMobiHeader($f);
-            $exthData = $this->parseExth($f);
+            $exthData = $this->exthData($f, $mobiData);
 
             if (!isset($palmDbData['records'][0])) {
                 throw new ParserException();
@@ -536,15 +558,11 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, kf8_header: int|null}
+     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
      */
-    protected function parseExth(\SplFileObject $f): array
+    protected static function emptyExth(): array
     {
-        $f->fseek(4, \SEEK_CUR); // EXTH
-        $f->fseek(4, \SEEK_CUR); // length
-        $records = $this->readInt($f, 4);
-
-        $meta = [
+        return [
             'authors' => [],
             'subjects' => [],
             'publisher' => null,
@@ -554,8 +572,56 @@ class MobiDriver extends AbstractDriver
             'language' => null,
             'license' => null,
             'coveroffset' => null,
+            'thumboffset' => null,
             'kf8_header' => null,
         ];
+    }
+
+    /**
+     * The cover image record offset: EXTH 201 (cover), falling back to EXTH 202
+     * (thumbnail). 0xFFFFFFFF means "none".
+     *
+     * @param array{coveroffset: int|null, thumboffset: int|null} $exthData
+     */
+    protected static function coverOffset(array $exthData): ?int
+    {
+        $cover = $exthData['coveroffset'];
+        if (null !== $cover && 0xFFFFFFFF !== $cover) {
+            return $cover;
+        }
+
+        $thumbnail = $exthData['thumboffset'];
+        if (null !== $thumbnail && $thumbnail > 0 && 0xFFFFFFFF !== $thumbnail) {
+            return $thumbnail;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{exth_flags: int} $mobiData
+     *
+     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
+     */
+    protected function exthData(\SplFileObject $f, array $mobiData): array
+    {
+        if (0 === ($mobiData['exth_flags'] & 0x40)) {
+            return self::emptyExth();
+        }
+
+        return $this->parseExth($f);
+    }
+
+    /**
+     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
+     */
+    protected function parseExth(\SplFileObject $f): array
+    {
+        $f->fseek(4, \SEEK_CUR); // EXTH
+        $f->fseek(4, \SEEK_CUR); // length
+        $records = $this->readInt($f, 4);
+
+        $meta = self::emptyExth();
         for ($i = 0; $i < $records; ++$i) {
             $type = $this->readInt($f, 4);
             $length = $this->readInt($f, 4);
@@ -594,6 +660,10 @@ class MobiDriver extends AbstractDriver
                 case 201: // cover offset: 4-byte big-endian, added to the first image index
                     $unpacked = \unpack('N', \substr($data, 0, 4));
                     $meta['coveroffset'] = false !== $unpacked ? $unpacked[1] : null;
+                    break;
+                case 202: // thumbnail offset, same encoding as 201
+                    $unpacked = \unpack('N', \substr($data, 0, 4));
+                    $meta['thumboffset'] = false !== $unpacked ? $unpacked[1] : null;
                     break;
                 case 121: // record number of the KF8 header in a joint MOBI/KF8 file
                     $unpacked = \unpack('N', \substr($data, 0, 4));
@@ -711,7 +781,7 @@ class MobiDriver extends AbstractDriver
     /**
      * @see https://wiki.mobileread.com/wiki/MOBI#MOBI_Header
      *
-     * @return array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int}
+     * @return array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int, exth_flags: int}
      */
     protected function parseMobiHeader(\SplFileObject $f): array
     {
@@ -816,6 +886,7 @@ class MobiDriver extends AbstractDriver
             'first_non_book_index' => $firstNonBookIndex,
             'first_image_index' => $firstImageIndex,
             'ncx_index' => $INDXRecordOffset,
+            'exth_flags' => $EXTHflags,
         ];
     }
 }

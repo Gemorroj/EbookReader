@@ -118,6 +118,76 @@ final class MobiDriverTest extends TestCase
         self::assertStringNotContainsString('mbp:', $content);
     }
 
+    public function testNormalizesRecordIndexVariants(): void
+    {
+        $image = \file_get_contents(__DIR__.'/../fixtures/images/png.png');
+        self::assertNotFalse($image);
+
+        $text = '<html><body><p><img lowrecindex="00001"/><img hirecindex="00002"/></p></body></html>';
+
+        $result = $this->withMobi(
+            self::buildMobi('Title', 1, 65001, \strlen($text), 1, [$text, $image, $image], firstImageIndex: 2),
+            static fn (MobiDriver $driver): array => [
+                $driver->getSections()[0]->getContent(),
+                $driver->getSections()[0]->getResources(),
+            ]
+        );
+
+        $content = $result[0];
+        self::assertStringContainsString('<img src="00001"/>', $content);
+        self::assertStringContainsString('<img src="00002"/>', $content);
+        self::assertStringNotContainsString('recindex', $content);
+
+        self::assertCount(2, $result[1]);
+        self::assertSame('00001', $result[1][0]->getPath());
+        self::assertSame('00002', $result[1][1]->getPath());
+    }
+
+    public function testWithoutExthHeader(): void
+    {
+        $text = '<html><body><p>Hello</p></body></html>';
+
+        $result = $this->withMobi(
+            self::buildMobi('NoExth', 1, 65001, \strlen($text), 1, [$text], withExth: false),
+            static function (MobiDriver $driver): array {
+                $meta = $driver->getMeta();
+
+                return [$driver->isValid(), $meta->getTitle(), $meta->getAuthors(), $driver->getCover()];
+            }
+        );
+
+        self::assertTrue($result[0]);
+        self::assertSame('NoExth', $result[1]);
+        self::assertSame([], $result[2]);
+        self::assertNull($result[3]);
+    }
+
+    public function testCoverFromThumbnailFallback(): void
+    {
+        $image = \file_get_contents(__DIR__.'/../fixtures/images/png.png');
+        self::assertNotFalse($image);
+        $text = '<html><body>x</body></html>';
+
+        // EXTH 201 is "none", so the thumbnail (202) must be used instead.
+        $cover = $this->withMobi(
+            self::buildMobi(
+                'Title',
+                1,
+                65001,
+                \strlen($text),
+                1,
+                [$text, $image, $image],
+                firstImageIndex: 2,
+                exthRecords: [201 => \pack('N', 0xFFFFFFFF), 202 => \pack('N', 1)]
+            ),
+            static fn (MobiDriver $driver) => $driver->getCover()
+        );
+
+        self::assertNotNull($cover);
+        self::assertSame('image/png', $cover->getMime());
+        self::assertSame($image, $cover->getData());
+    }
+
     public function testUnsupportedCompression(): void
     {
         $this->expectException(UnsupportedCompressionException::class);
@@ -315,7 +385,8 @@ final class MobiDriverTest extends TestCase
     /**
      * Builds a minimal but spec-conformant MOBI (Palm Database) in memory.
      *
-     * @param list<string> $records records after record 0 (text/HUFF/CDIC/...)
+     * @param list<string>      $records     records after record 0 (text/HUFF/CDIC/...)
+     * @param array<int,string> $exthRecords EXTH type => payload
      */
     private static function buildMobi(
         string $title,
@@ -326,11 +397,21 @@ final class MobiDriverTest extends TestCase
         array $records,
         int $huffmanRecordOffset = 0,
         int $huffmanRecordCount = 0,
+        int $firstImageIndex = 0,
+        array $exthRecords = [],
+        bool $withExth = true,
     ): string {
-        $nameOffset = 260; // 16 (PalmDOC) + 232 (MOBI header) + 12 (EXTH)
+        $exthBody = '';
+        foreach ($exthRecords as $type => $data) {
+            $exthBody .= \pack('N', $type).\pack('N', 8 + \strlen($data)).$data;
+        }
+        $exth = $withExth
+            ? 'EXTH'.\pack('N', 12 + \strlen($exthBody)).\pack('N', \count($exthRecords)).$exthBody
+            : '';
+        $nameOffset = 16 + 232 + \strlen($exth);
         $record0 = self::palmDocHeader($compression, $textLength, $textRecordCount)
-            .self::mobiHeader($nameOffset, \strlen($title), $encoding, $huffmanRecordOffset, $huffmanRecordCount)
-            .'EXTH'.\pack('N', 12).\pack('N', 0)
+            .self::mobiHeader($nameOffset, \strlen($title), $encoding, $huffmanRecordOffset, $huffmanRecordCount, $firstImageIndex, $withExth)
+            .$exth
             .$title;
 
         $records = \array_merge([$record0], $records);
@@ -370,6 +451,8 @@ final class MobiDriverTest extends TestCase
         int $encoding,
         int $huffmanRecordOffset,
         int $huffmanRecordCount,
+        int $firstImageIndex = 0,
+        bool $withExth = true,
     ): string {
         $header = \str_repeat("\x00", 232);
 
@@ -384,9 +467,10 @@ final class MobiDriverTest extends TestCase
         $put(80, \pack('N', 4));      // first non-book index
         $put(84, \pack('N', $nameOffset));
         $put(88, \pack('N', $nameLength));
+        $put(108, \pack('N', $firstImageIndex));
         $put(112, \pack('N', $huffmanRecordOffset));
         $put(116, \pack('N', $huffmanRecordCount));
-        $put(128, \pack('N', 0x40));  // EXTH flags
+        $put(128, \pack('N', $withExth ? 0x40 : 0));  // EXTH flags
         $put(242, \pack('n', 0));     // extra record data flags
 
         return $header;
