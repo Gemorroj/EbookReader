@@ -366,7 +366,41 @@ final class Epub3Driver extends AbstractDriver
             $assets[$path] = new EbookResource($path, $content, $mime);
         }
 
-        return [$assets, $styleReferences];
+        // Follow @import chains so a section pulls in the whole stylesheet
+        // dependency tree, not only the directly linked sheet.
+        $resolved = [];
+        foreach ($styleReferences as $path => $_) {
+            $resolved[$path] = \array_keys(self::transitiveReferences($path, $styleReferences, []));
+        }
+
+        return [$assets, $resolved];
+    }
+
+    /**
+     * The transitive closure of a stylesheet's references (imported sheets and
+     * their own assets, recursively).
+     *
+     * @param array<string, list<string>> $direct
+     * @param array<string, true>         $visited
+     *
+     * @return array<string, true>
+     */
+    private static function transitiveReferences(string $path, array $direct, array $visited): array
+    {
+        if (isset($visited[$path])) {
+            return [];
+        }
+        $visited[$path] = true;
+
+        $references = [];
+        foreach ($direct[$path] ?? [] as $reference) {
+            $references[$reference] = true;
+            foreach (self::transitiveReferences($reference, $direct, $visited) as $nested => $_) {
+                $references[$nested] = true;
+            }
+        }
+
+        return $references;
     }
 
     /**
@@ -431,6 +465,24 @@ final class Epub3Driver extends AbstractDriver
                 $references[$path] = true;
 
                 return 'url('.$matches[1].$path.$matches[1].')';
+            },
+            $css
+        ) ?? $css;
+
+        $css = \preg_replace_callback(
+            '~@import\s+(?:url\(\s*)?([\'"]?)([^\'")>\s;]+)\1\s*\)?~i',
+            function (array $matches) use ($baseDir, $knownPaths, &$references): string {
+                $resolved = $this->canonicalReference($matches[2], $baseDir);
+                if (null === $resolved) {
+                    return $matches[0];
+                }
+                [$path] = $resolved;
+                if (!isset($knownPaths[$path])) {
+                    return $matches[0];
+                }
+                $references[$path] = true;
+
+                return '@import '.$matches[1].$path.$matches[1];
             },
             $css
         ) ?? $css;
@@ -508,14 +560,14 @@ final class Epub3Driver extends AbstractDriver
             foreach ($spineNode->getElementsByTagNameNS('*', 'itemref') as $spinItemNode) {
                 $id = self::attribute($spinItemNode, 'idref');
                 if (!isset($manifest[$id])) {
-                    throw new ParserException();
+                    continue;
                 }
                 $item = $manifest[$id];
                 $documentPath = $item['path'];
 
                 $content = $zip->getFromName($documentPath);
                 if (false === $content) {
-                    throw new ParserException();
+                    continue;
                 }
 
                 $domFile = $this->parseXml($content);
@@ -546,7 +598,7 @@ final class Epub3Driver extends AbstractDriver
                     throw new ParserException();
                 }
 
-                $data[] = new Epub3Section($documentPath, $text, $title, $isNavigation, $resources);
+                $data[] = new Epub3Section($documentPath, HtmlSanitizer::sanitize($text), $title, $isNavigation, $resources);
             }
         } finally {
             $zip->close();
@@ -561,64 +613,143 @@ final class Epub3Driver extends AbstractDriver
         // https://wiki.mobileread.com/wiki/Ebook_Covers
 
         $packageNode = $this->getPackageNode();
-        /** @var \Dom\Element|null $metadataNode */
-        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
-        if (!$metadataNode instanceof \Dom\Element) {
-            return null;
-        }
-        $metaNodeList = $metadataNode->getElementsByTagNameNS('*', 'meta');
-
-        $manifestId = null;
-        /** @var \Dom\Element $metaNode */
-        foreach ($metaNodeList as $metaNode) {
-            $name = self::attribute($metaNode, 'name');
-            if ('cover' === $name) {
-                $manifestId = self::attribute($metaNode, 'content');
-                break;
-            }
-        }
-
-        /** @var list<\Dom\Element> $potentialCoverNodes */
-        $potentialCoverNodes = [];
         /** @var \Dom\Element|null $manifestNode */
         $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
         if (!$manifestNode instanceof \Dom\Element) {
             return null;
         }
-        $manifestItemsNode = $manifestNode->getElementsByTagNameNS('*', 'item');
-        /** @var \Dom\Element $manifestItemNode */
-        foreach ($manifestItemsNode as $manifestItemNode) {
-            if ($manifestId && $manifestId === self::attribute($manifestItemNode, 'id') && \str_starts_with(self::attribute($manifestItemNode, 'media-type'), 'image/')) {
-                \array_unshift($potentialCoverNodes, $manifestItemNode);
-            } elseif (\in_array(self::attribute($manifestItemNode, 'id'), ['cover', 'cover-image', 'cover-img'], true) && \str_starts_with(self::attribute($manifestItemNode, 'media-type'), 'image/')) {
-                $potentialCoverNodes[] = $manifestItemNode;
-            }
-        }
-
-        $potentialCoverNode = $potentialCoverNodes[0] ?? null;
-        if (!$potentialCoverNode) {
-            return null;
-        }
-
-        $mime = self::attribute($potentialCoverNode, 'media-type');
-        $zipFilePath = $this->resolveZipPath(self::attribute($potentialCoverNode, 'href'));
+        $manifest = $this->manifestMap($manifestNode);
 
         $zip = new \ZipArchive();
-        $res = $zip->open($this->getFile(), \ZipArchive::RDONLY);
-        if (true !== $res) {
+        if (true !== $zip->open($this->getFile(), \ZipArchive::RDONLY)) {
             throw new ParserException();
         }
 
         try {
-            $content = $zip->getFromName($zipFilePath);
-            if (false === $content) {
-                throw new ParserException();
+            foreach ($this->coverHrefs($packageNode, $manifest) as $path) {
+                $image = $this->findCoverImage($path, $manifest, $zip);
+                if (null !== $image) {
+                    return new Cover($image['content'], $image['mime']);
+                }
             }
         } finally {
             $zip->close();
         }
 
-        return new Cover($content, $mime);
+        return null;
+    }
+
+    /**
+     * Cover candidates in priority order: the `<meta name="cover">` item, an
+     * EPUB3 `cover-image`, a cover-named item, then the guide's cover reference.
+     *
+     * @param array<string, array{mediaType: string, path: string, properties: string}> $manifest
+     *
+     * @return list<string> canonical ZIP paths
+     */
+    private function coverHrefs(\Dom\Element $packageNode, array $manifest): array
+    {
+        $paths = [];
+
+        /** @var \Dom\Element|null $metadataNode */
+        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        if ($metadataNode instanceof \Dom\Element) {
+            foreach ($metadataNode->getElementsByTagNameNS('*', 'meta') as $metaNode) {
+                if ('cover' === self::attribute($metaNode, 'name')) {
+                    $coverId = self::attribute($metaNode, 'content');
+                    if (isset($manifest[$coverId])) {
+                        $paths[] = $manifest[$coverId]['path'];
+                    }
+                    break;
+                }
+            }
+        }
+
+        foreach ($manifest as $item) {
+            $properties = \preg_split('/\s+/', $item['properties'], -1, \PREG_SPLIT_NO_EMPTY);
+            if ($properties && \in_array('cover-image', $properties, true) && \str_starts_with($item['mediaType'], 'image/')) {
+                $paths[] = $item['path'];
+            }
+        }
+
+        foreach ($manifest as $id => $item) {
+            if (\str_starts_with($item['mediaType'], 'image/') && \in_array(\strtolower($id), ['cover', 'cover-image', 'cover-img'], true)) {
+                $paths[] = $item['path'];
+            }
+        }
+
+        /** @var \Dom\Element|null $guideNode */
+        $guideNode = $packageNode->getElementsByTagNameNS('*', 'guide')->item(0);
+        if ($guideNode instanceof \Dom\Element) {
+            foreach ($guideNode->getElementsByTagNameNS('*', 'reference') as $referenceNode) {
+                if (\str_contains(\strtolower(self::attribute($referenceNode, 'type')), 'cover')) {
+                    $href = self::attribute($referenceNode, 'href');
+                    if ('' !== $href) {
+                        $paths[] = $this->resolveZipPath($href);
+                    }
+                }
+            }
+        }
+
+        return \array_values(\array_unique($paths));
+    }
+
+    /**
+     * The image behind a cover candidate: the item itself, or the image inside a
+     * cover XHTML page.
+     *
+     * @param array<string, array{mediaType: string, path: string, properties: string}> $manifest
+     *
+     * @return array{content: string, mime: string}|null
+     */
+    private function findCoverImage(string $path, array $manifest, \ZipArchive $zip): ?array
+    {
+        $mediaTypeByPath = [];
+        foreach ($manifest as $item) {
+            $mediaTypeByPath[$item['path']] = $item['mediaType'];
+        }
+
+        $content = $zip->getFromName($path);
+        if (false === $content) {
+            return null;
+        }
+
+        $mediaType = $mediaTypeByPath[$path] ?? '';
+        if (\str_starts_with($mediaType, 'image/')) {
+            return ['content' => $content, 'mime' => $mediaType];
+        }
+
+        try {
+            $dom = $this->parseXml($content);
+        } catch (ParserException) {
+            return null;
+        }
+
+        /** @var \Dom\Element $node */
+        foreach ($dom->getElementsByTagNameNS('*', '*') as $node) {
+            if (!\in_array(\strtolower($node->localName ?? $node->nodeName), ['img', 'image'], true)) {
+                continue;
+            }
+
+            /** @var \Dom\Attr $attribute */
+            foreach ($node->attributes as $attribute) {
+                if (!\in_array(\strtolower($attribute->localName), ['src', 'href'], true)) {
+                    continue;
+                }
+                $resolved = $this->canonicalReference($attribute->value, \dirname($path));
+                if (null === $resolved) {
+                    continue;
+                }
+                [$imagePath] = $resolved;
+                $imageMime = $mediaTypeByPath[$imagePath] ?? '';
+                $image = \str_starts_with($imageMime, 'image/') ? $zip->getFromName($imagePath) : false;
+                if (false !== $image) {
+                    return ['content' => $image, 'mime' => $imageMime];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

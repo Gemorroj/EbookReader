@@ -74,23 +74,44 @@ final class OpfMetadataReader
     }
 
     /**
-     * All dc:title values joined, as OPF3 titles may be refined (main/subtitle).
+     * EPUB3 title: the `title-type="main"` title (or the first one) plus the
+     * `subtitle` title appended with ": ", matching calibre.
      */
     private static function title(\Dom\Element $metadata): string
     {
-        $titles = [];
+        $main = null;
+        $first = null;
+        $subtitle = null;
+
         foreach ($metadata->getElementsByTagNameNS('*', 'title') as $node) {
             $value = \mb_trim($node->textContent);
-            if ('' !== $value) {
-                $titles[] = $value;
+            if ('' === $value) {
+                continue;
+            }
+
+            $first ??= $value;
+            $id = self::attr($node, 'id') ?? '';
+            $type = '' === $id ? '' : \strtolower(self::refinedValue($metadata, $id, 'title-type') ?? '');
+
+            if (null === $main && \str_contains($type, 'main')) {
+                $main = $value;
+            }
+            if (null === $subtitle && (\str_contains($type, 'subtitle') || \str_contains($type, 'sub-title'))) {
+                $subtitle = $value;
             }
         }
 
-        return \implode(', ', $titles);
+        $main ??= $first;
+        if (null === $main) {
+            return '';
+        }
+
+        return null === $subtitle ? $main : $main.': '.$subtitle;
     }
 
     /**
-     * Creators with opf:role="aut"; when none is marked, all creators.
+     * Creators marked as authors (EPUB2 `opf:role="aut"` or an EPUB3 `role`
+     * refinement); when none is marked, all creators.
      *
      * @return list<string>
      */
@@ -103,7 +124,13 @@ final class OpfMetadataReader
                 continue;
             }
             $all[] = $value;
-            if ('aut' === self::attr($node, 'opf:role')) {
+
+            $role = self::attr($node, 'opf:role');
+            if (null === $role || '' === $role) {
+                $id = self::attr($node, 'id') ?? '';
+                $role = '' === $id ? null : self::refinedValue($metadata, $id, 'role');
+            }
+            if (null !== $role && 'aut' === \strtolower($role)) {
                 $authors[] = $value;
             }
         }
@@ -138,7 +165,20 @@ final class OpfMetadataReader
      */
     private static function date(\Dom\Element $metadata): PublishDate
     {
-        $value = self::firstText($metadata, 'date');
+        $value = null;
+        foreach ($metadata->getElementsByTagNameNS('*', 'date') as $node) {
+            $candidate = \mb_trim($node->textContent);
+            if ('' === $candidate) {
+                continue;
+            }
+            // Prefer the publication date over e.g. a modification date.
+            if ('publication' === \strtolower(self::attr($node, 'opf:event') ?? '')) {
+                $value = $candidate;
+                break;
+            }
+            $value ??= $candidate;
+        }
+
         if (null === $value) {
             return new PublishDate();
         }

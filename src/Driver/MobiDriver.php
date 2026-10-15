@@ -171,7 +171,7 @@ class MobiDriver extends AbstractDriver
         $text = \preg_replace('~<mbp:pagebreak\s*/?>~i', '<hr/>', $text) ?? $text;
         $text = \preg_replace('~</?mbp:[a-z0-9_:-]+[^>]*>~i', '', $text) ?? $text;
 
-        return $text;
+        return HtmlSanitizer::sanitize($text);
     }
 
     /**

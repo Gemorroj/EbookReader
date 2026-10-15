@@ -297,6 +297,177 @@ final class Epub3DriverTest extends TestCase
         self::assertSame($paths, \array_values(\array_unique($paths)));
     }
 
+    public function testCoverFromGuideCoverPage(): void
+    {
+        $image = \file_get_contents(__DIR__.'/../fixtures/images/png.png');
+        self::assertNotFalse($image);
+
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => '<?xml version="1.0"?>'
+                .'<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+                .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>'
+                .'<manifest><item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="img" href="images/c.png" media-type="image/png"/></manifest>'
+                .'<spine><itemref idref="ch"/></spine>'
+                .'<guide><reference type="cover" href="cover.xhtml"/></guide></package>',
+            'cover.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body><img src="images/c.png"/></body></html>',
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+            'images/c.png' => $image,
+        ]);
+
+        try {
+            $cover = new Epub3Driver($file)->getCover();
+            self::assertNotNull($cover);
+            self::assertSame('image/png', $cover->getMime());
+            self::assertSame($image, $cover->getData());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testCoverFromProperties(): void
+    {
+        $image = \file_get_contents(__DIR__.'/../fixtures/images/png.png');
+        self::assertNotFalse($image);
+
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => '<?xml version="1.0"?>'
+                .'<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+                .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title></metadata>'
+                .'<manifest><item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="img" href="images/c.png" media-type="image/png" properties="cover-image"/></manifest>'
+                .'<spine><itemref idref="ch"/></spine></package>',
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+            'images/c.png' => $image,
+        ]);
+
+        try {
+            $cover = new Epub3Driver($file)->getCover();
+            self::assertNotNull($cover);
+            self::assertSame('image/png', $cover->getMime());
+            self::assertSame($image, $cover->getData());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testImportedStylesheetAssetsAreCollected(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="main" href="main.css" media-type="text/css"/>'
+                .'<item id="inner" href="inner.css" media-type="text/css"/>'
+                .'<item id="font" href="fonts/x.ttf" media-type="font/ttf"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                .'<link rel="stylesheet" href="main.css"/></head><body>x</body></html>',
+            'main.css' => '@import "inner.css";',
+            'inner.css' => '@font-face{src:url(fonts/x.ttf)}',
+            'fonts/x.ttf' => 'FONT',
+        ]);
+
+        try {
+            $section = new Epub3Driver($file)->getSections()[0];
+            $byPath = [];
+            foreach ($section->getResources() as $resource) {
+                $byPath[$resource->getPath()] = $resource;
+            }
+
+            self::assertArrayHasKey('main.css', $byPath);
+            self::assertArrayHasKey('inner.css', $byPath);
+            self::assertArrayHasKey('fonts/x.ttf', $byPath);
+            // The @import was rewritten to the canonical stylesheet path.
+            self::assertStringContainsString('inner.css', $byPath['main.css']->getData());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testImportUrlSyntaxAndCycleAreHandled(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="a" href="a.css" media-type="text/css"/>'
+                .'<item id="b" href="b.css" media-type="text/css"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                .'<link rel="stylesheet" href="a.css"/></head><body>x</body></html>',
+            'a.css' => '@import url("b.css");',
+            'b.css' => '@import "a.css";',
+        ]);
+
+        try {
+            $section = new Epub3Driver($file)->getSections()[0];
+            $byPath = [];
+            foreach ($section->getResources() as $resource) {
+                $byPath[$resource->getPath()] = $resource;
+            }
+
+            self::assertArrayHasKey('a.css', $byPath);
+            self::assertArrayHasKey('b.css', $byPath);
+            // url() syntax is rewritten and the a<->b cycle does not recurse.
+            self::assertStringContainsString('b.css', $byPath['a.css']->getData());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testSkipsMissingSpineItems(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch1"/><itemref idref="missing"/><itemref idref="ch2"/>'
+            ),
+            'ch1.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>one</body></html>',
+            // ch2.xhtml is in the manifest but absent from the archive
+        ]);
+
+        try {
+            $sections = new Epub3Driver($file)->getSections();
+            self::assertCount(1, $sections);
+            self::assertStringContainsString('one', $sections[0]->getContent());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testScriptsAndRemoteReferencesAreRemoved(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head><script>alert(1)</script></head>'
+                .'<body><img src="https://cdn.example.com/x.png"/></body></html>',
+        ]);
+
+        try {
+            $content = new Epub3Driver($file)->getSections()[0]->getContent();
+            self::assertStringNotContainsString('<script', $content);
+            self::assertStringNotContainsString('cdn.example.com', $content);
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testEncryptedContentIsRejected(): void
     {
         $file = self::makeEpub([
@@ -656,7 +827,7 @@ final class Epub3DriverTest extends TestCase
     {
         yield [
             __DIR__.'/../fixtures/epub/epub3-nav.epub',
-            'Children\'s Literature, A Textbook of Sources for Teachers and Teacher-Training Classes', // title
+            'Children\'s Literature: A Textbook of Sources for Teachers and Teacher-Training Classes', // title
             'Charles Madison Curry, Erle Elsworth Clippinger', // author
             null, // publisher
             null, // isbn

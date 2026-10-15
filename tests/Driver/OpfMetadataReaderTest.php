@@ -39,7 +39,7 @@ final class OpfMetadataReaderTest extends TestCase
         self::assertSame('images/cover.jpg', OpfMetadataReader::coverHref($xml));
     }
 
-    public function testMultipleTitlesAreJoined(): void
+    public function testUnrefinedTitlesUseTheFirst(): void
     {
         $meta = OpfMetadataReader::fromXml(
             '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
@@ -47,7 +47,21 @@ final class OpfMetadataReaderTest extends TestCase
             .'<dc:title>Main</dc:title><dc:title>Subtitle</dc:title></metadata></package>'
         );
 
-        self::assertSame('Main, Subtitle', $meta->getTitle());
+        self::assertSame('Main', $meta->getTitle());
+    }
+
+    public function testRefinedTitleCombinesMainAndSubtitle(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            .'<dc:title id="t1">Main</dc:title><dc:title id="t2">Sub</dc:title>'
+            .'<meta refines="#t1" property="title-type">main</meta>'
+            .'<meta refines="#t2" property="title-type">subtitle</meta>'
+            .'</metadata></package>'
+        );
+
+        self::assertSame('Main: Sub', $meta->getTitle());
     }
 
     public function testCreatorRolesFilterAuthors(): void
@@ -81,6 +95,35 @@ final class OpfMetadataReaderTest extends TestCase
         self::assertSame([], $meta->getAuthors());
         self::assertNull($meta->getPublisher());
         self::assertTrue($meta->getPublishDate()->isEmpty());
+    }
+
+    public function testCreatorsFromRefinedRole(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<dc:creator id="a">Author</dc:creator><dc:creator id="b">Editor</dc:creator>'
+            .'<meta refines="#a" property="role">aut</meta>'
+            .'<meta refines="#b" property="role">edt</meta>'
+            .'</metadata><spine/></package>'
+        );
+
+        self::assertSame(['Author'], $meta->getAuthors());
+    }
+
+    public function testDatePrefersPublicationEvent(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<dc:date opf:event="modification">2020-01-01</dc:date>'
+            .'<dc:date opf:event="publication">1999-05-02</dc:date>'
+            .'</metadata><spine/></package>'
+        );
+
+        self::assertSame(1999, $meta->getPublishDate()->getYear());
+        self::assertSame(5, $meta->getPublishDate()->getMonth());
+        self::assertSame(2, $meta->getPublishDate()->getDay());
     }
 
     public function testSeriesFromCalibreMetas(): void

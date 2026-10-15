@@ -168,4 +168,3 @@ Detection covers legacy Cyrillic/Latin and Chinese (GB18030) and refuses binary 
 - TXT has no markup: chapters are guessed from keywords (English/Russian).
 - Markdown is exposed as its source (`text/markdown`), not converted to HTML; the table of contents comes from ATX/Setext headings, and detection is heuristic (a document needs a heading, a fenced code block, a link/image or a table, so prose-only or Setext-only files read as TXT).
 - AZW3 supports standalone and joint MOBI6 + KF8 files.
-- EPUB `@import` chains are not resolved.

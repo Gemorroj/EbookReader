@@ -472,7 +472,7 @@ final class Azw3Driver extends MobiDriver
             $html
         ) ?? $html;
 
-        return [$html, $resources];
+        return [HtmlSanitizer::sanitize($html), $resources];
     }
 
     private static function extractTitle(string $html): ?string

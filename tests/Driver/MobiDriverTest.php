@@ -118,6 +118,21 @@ final class MobiDriverTest extends TestCase
         self::assertStringNotContainsString('mbp:', $content);
     }
 
+    public function testSanitizesScriptsAndRemoteReferences(): void
+    {
+        $text = '<html><body><script>alert(1)</script>'
+            .'<img src="https://cdn.example.com/x.png"/><p>x</p></body></html>';
+
+        $content = $this->withMobi(
+            self::buildMobi('Title', 1, 65001, \strlen($text), 1, [$text]),
+            static fn (MobiDriver $driver): string => $driver->getSections()[0]->getContent()
+        );
+
+        self::assertStringNotContainsString('<script', $content);
+        self::assertStringNotContainsString('cdn.example.com', $content);
+        self::assertStringContainsString('<p>x</p>', $content);
+    }
+
     public function testNormalizesRecordIndexVariants(): void
     {
         $image = \file_get_contents(__DIR__.'/../fixtures/images/png.png');
