@@ -103,6 +103,64 @@ final class Fb2DriverTest extends TestCase
         self::assertSame(1, $contents[1]->getSectionIndex());
     }
 
+    public function testReadsNotesBodyAndResolvesNoteLinks(): void
+    {
+        $sections = new Fb2Driver(__DIR__.'/../fixtures/fb2/fb2-epigraph.zip')->getSections();
+        self::assertCount(461, $sections);
+
+        $byId = [];
+        $targets = [];
+        foreach ($sections as $section) {
+            $byId[$section->getId()] = $section;
+            \preg_match_all('~href="#([^"]+)"~', $section->getContent(), $matches);
+            foreach ($matches[1] as $target) {
+                $targets[$target] = true;
+            }
+        }
+
+        // The notes body is exposed as sections with their ids anchored.
+        self::assertArrayHasKey('n_1', $byId);
+        self::assertStringContainsString('<a id="n_1"></a>', $byId['n_1']->getContent());
+        self::assertStringContainsString('<p class="text-author">', $byId['n_1']->getContent());
+
+        // Every internal link resolves to a section that exists (and is anchored).
+        self::assertNotEmpty($targets);
+        foreach (\array_keys($targets) as $target) {
+            self::assertArrayHasKey($target, $byId);
+            self::assertStringContainsString('<a id="'.$target.'"></a>', $byId[$target]->getContent());
+        }
+    }
+
+    public function testPoemTitleIsNotInTableOfContents(): void
+    {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+            .'<description><title-info><book-title>T</book-title>'
+            .'<author><first-name>A</first-name><last-name>B</last-name></author><lang>en</lang></title-info></description>'
+            .'<body><section><title><p>Chapter One</p></title>'
+            .'<poem><title><p>Poem Title</p></title><stanza><v>line</v></stanza>'
+            .'<text-author>Poet</text-author></poem></section></body></FictionBook>';
+
+        $file = \tempnam(\sys_get_temp_dir(), 'fb2');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $xml);
+
+        try {
+            $driver = new Fb2Driver($file);
+
+            $titles = [];
+            foreach ($driver->getTableOfContents() as $entry) {
+                $titles[] = $entry->getTitle();
+            }
+            self::assertSame(['Chapter One'], $titles);
+
+            self::assertStringContainsString('<h4>Poem Title</h4>', $driver->getSections()[0]->getContent());
+            self::assertStringContainsString('<p class="text-author">Poet</p>', $driver->getSections()[0]->getContent());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testMetaAuthorsAndSubjects(): void
     {
         $meta = new Fb2Driver(__DIR__.'/../fixtures/fb2/fb2-cyrillic.fb2')->getMeta();
@@ -199,7 +257,7 @@ final class Fb2DriverTest extends TestCase
             self::assertCount(1, $sections);
             self::assertSame('Chapter', $sections[0]->getTitle());
             self::assertSame(
-                '<h2>Chapter</h2><h3>Sub</h3>'
+                '<a id="s1"></a><h2>Chapter</h2><h3>Sub</h3>'
                 .'<p>Hello <em>world</em> <a href="#n1">[1]</a></p>'
                 .'<br/><img src="#img"/>',
                 $sections[0]->getContent()
@@ -341,7 +399,7 @@ final class Fb2DriverTest extends TestCase
     {
         yield [
             __DIR__.'/../fixtures/fb2/fb2-cyrillic.fb2',
-            42,
+            48,
             null,
             '<p>© Салтыков М.М., ил. на обл., 2021</p><p>© ООО «Издательство АСТ», 2021</p><h3>* * *</h3>',
             null,
@@ -349,7 +407,7 @@ final class Fb2DriverTest extends TestCase
         ];
         yield [
             __DIR__.'/../fixtures/fb2/fb2-epigraph.zip',
-            381,
+            461,
             null,
             '<div class="poem"><div class="stanza"><p>He мысля гордый свет забавить,</p><p>Вниманье дружбы возлюбя,</p><p>Хотел бы я тебе представить</p><p>Залог достойнее тебя,</p><p>Достойнее души прекрасной,</p><p>Святой исполненной мечты,</p><p>Поэзии живой и ясной,</p><p>Высоких дум и простоты;</p><p>Но так и быть – рукой пристрастной</p><p>Прими собранье пестрых глав,</p><p>Полусмешных, полупечальных,</p><p>Простонародных, идеальных,</p><p>Небрежный плод моих забав,</p><p>Бессонниц, легких вдохновений,</p><p>Незрелых и увядших лет,</p><p>Ума холодных наблюдений</p><p>И сердца горестных замет.</p></div></div>',
             null,

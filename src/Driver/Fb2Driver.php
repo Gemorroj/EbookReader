@@ -69,14 +69,21 @@ final class Fb2Driver extends AbstractDriver
 
         $titleNode = self::childElements($sectionNode, 'title')[0] ?? null;
         $title = $titleNode?->textContent;
-        $text = $styleBlock.$this->renderChildren($sectionNode);
+
+        // The section's own epigraph/annotation are exposed separately, so they
+        // are not repeated in the content; an anchor makes in-document links
+        // (e.g. FB2 footnotes) resolve.
+        $anchor = '' === $sectionNode->getAttribute('id')
+            ? ''
+            : '<a id="'.\htmlspecialchars($sectionNode->getAttribute('id'), \ENT_QUOTES | \ENT_HTML5, 'UTF-8').'"></a>';
+        $text = $styleBlock.$anchor.$this->renderChildren($sectionNode, false, ['epigraph', 'annotation']);
 
         $annotationNode = self::childElements($sectionNode, 'annotation')[0] ?? null;
         $annotation = $annotationNode ? $this->renderChildren($annotationNode) : null;
 
         $epigraphs = [];
         foreach (self::childElements($sectionNode, 'epigraph') as $epigraphNode) {
-            $epigraphText = $this->renderChildren($epigraphNode);
+            $epigraphText = $this->renderChildren($epigraphNode, false, ['text-author']);
             if ('' !== $epigraphText) {
                 $authors = [];
                 foreach (self::childElements($epigraphNode, 'text-author') as $textAuthorNode) {
@@ -206,22 +213,31 @@ final class Fb2Driver extends AbstractDriver
             'a' => $this->renderLink($node, $inPoem),
             'image' => $this->renderImage($node),
             'empty-line' => '<br/>',
-            // Exposed by getTitle()/getEpigraphs()/getAnnotation() or emitted as
-            // its own section, so it must not be duplicated inside the content.
-            'epigraph', 'annotation', 'text-author', 'section' => '',
+            'epigraph' => '<blockquote class="epigraph">'.$this->renderChildren($node, $inPoem).'</blockquote>',
+            'text-author' => '<p class="text-author">'.$this->renderChildren($node, $inPoem).'</p>',
+            'annotation' => $this->renderChildren($node, $inPoem),
+            // A nested section is emitted as its own section, so it must not be
+            // duplicated inside the parent content.
+            'section' => '',
             default => $this->renderChildren($node, $inPoem),
         };
     }
 
     /**
      * Renders the children of an FB2 node as HTML, escaping text nodes so the
-     * result is a well-formed HTML fragment.
+     * result is a well-formed HTML fragment. Direct child elements whose tag is
+     * listed in $skip are dropped.
+     *
+     * @param list<string> $skip
      */
-    private function renderChildren(\DOMNode $node, bool $inPoem = false): string
+    private function renderChildren(\DOMNode $node, bool $inPoem = false, array $skip = []): string
     {
         $html = '';
         foreach ($node->childNodes as $child) {
             if ($child instanceof \DOMElement) {
+                if (\in_array(\strtolower($child->localName ?? $child->tagName), $skip, true)) {
+                    continue;
+                }
                 $html .= $this->renderNode($child, $inPoem);
             } elseif (\XML_TEXT_NODE === $child->nodeType || \XML_CDATA_SECTION_NODE === $child->nodeType) {
                 $html .= \htmlspecialchars($child->nodeValue ?? '', \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
@@ -340,27 +356,33 @@ final class Fb2Driver extends AbstractDriver
         $sectionIndexes = [];
         $sectionCount = 0;
         $inBody = false;
+        $stack = [];
 
         try {
             while ($reader->read()) {
                 if (\XMLReader::ELEMENT === $reader->nodeType) {
+                    $parent = [] === $stack ? null : \end($stack);
                     if ('body' === $reader->name) {
                         $inBody = true;
                     } elseif ($inBody && 'section' === $reader->name) {
                         $sectionIndexes[] = $sectionCount;
                         ++$sectionCount;
-                    } elseif ($inBody && 'title' === $reader->name) {
+                    } elseif ($inBody && 'title' === $reader->name && ('section' === $parent || 'body' === $parent)) {
+                        // A section's (or a whole body's) title is an entry, but
+                        // not the title of a poem or epigraph.
                         $title = \mb_trim(\strip_tags($reader->readInnerXml()));
                         if ('' !== $title) {
                             $sectionIndex = \end($sectionIndexes);
                             $entries[] = new TableOfContentsEntry($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex, null, null);
                         }
                     }
-                } elseif ($inBody && \XMLReader::END_ELEMENT === $reader->nodeType) {
-                    if ('section' === $reader->name) {
+                    $stack[] = $reader->name;
+                } elseif (\XMLReader::END_ELEMENT === $reader->nodeType) {
+                    \array_pop($stack);
+                    if ('body' === $reader->name) {
+                        $inBody = false;
+                    } elseif ('section' === $reader->name) {
                         \array_pop($sectionIndexes);
-                    } elseif ('body' === $reader->name) {
-                        break;
                     }
                 }
             }
@@ -513,15 +535,7 @@ final class Fb2Driver extends AbstractDriver
         /** @var \DOMElement|null $annotationNode */
         $annotationNode = $titleInfoNode->getElementsByTagName('annotation')->item(0);
         if ($annotationNode) {
-            $text = [];
-            /** @var \DOMElement|\DOMNode|\DOMNameSpaceNode $childNode */
-            foreach ($annotationNode->childNodes as $childNode) {
-                if ($childNode instanceof \DOMElement && \in_array($childNode->tagName, ['p', 'table'], true)) {
-                    $text[] = $annotationNode->ownerDocument->saveHTML($childNode);
-                }
-            }
-
-            return \mb_trim(\implode('', $text));
+            return \mb_trim($this->renderChildren($annotationNode)) ?: null;
         }
 
         return null;
@@ -693,7 +707,8 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * Streams <section> elements of the first <body> without expanding the whole body into memory.
+     * Streams every <section> element of every <body> (including the notes /
+     * comments bodies) without expanding a whole body into memory.
      *
      * @return \Generator<\DOMElement>
      */
@@ -725,8 +740,8 @@ final class Fb2Driver extends AbstractDriver
 
                         yield $sectionNode;
                     }
-                } elseif ($inBody && \XMLReader::END_ELEMENT === $reader->nodeType && 'body' === $reader->name) {
-                    break;
+                } elseif (\XMLReader::END_ELEMENT === $reader->nodeType && 'body' === $reader->name) {
+                    $inBody = false;
                 }
             }
         } finally {
