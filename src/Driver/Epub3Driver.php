@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Html\Reference;
+use EbookReader\Driver\Html\Sanitizer;
+use EbookReader\Driver\Html\Tags;
+use EbookReader\Driver\Xml\Document;
+use EbookReader\Driver\Xml\Element;
 use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
@@ -21,20 +26,6 @@ use EbookReader\Model\TableOfContents\TableOfContentsEntry;
  */
 final class Epub3Driver extends AbstractDriver
 {
-    /**
-     * Attributes whose values may reference an asset or another document.
-     *
-     * @var list<string>
-     */
-    private const array REFERENCE_ATTRIBUTES = ['href', 'src', 'data'];
-
-    /**
-     * Elements whose references point at assets (images, fonts, stylesheets, media).
-     *
-     * @var list<string>
-     */
-    private const array ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
-
     /**
      * Font obfuscation algorithms (not DRM): the first bytes of the font are
      * XORed with a key derived from the book identifier.
@@ -116,13 +107,13 @@ final class Epub3Driver extends AbstractDriver
 
         $entries = [];
         if (null !== $this->encryptionXml) {
-            $dom = $this->parseXml($this->encryptionXml);
+            $dom = Document::parse($this->encryptionXml);
             foreach ($dom->getElementsByTagNameNS('*', 'EncryptedData') as $data) {
-                $method = $data->getElementsByTagNameNS('*', 'EncryptionMethod')->item(0);
-                $reference = $data->getElementsByTagNameNS('*', 'CipherReference')->item(0);
+                $method = Element::first($data, 'EncryptionMethod');
+                $reference = Element::first($data, 'CipherReference');
                 $entries[] = [
-                    'algorithm' => $method instanceof \Dom\Element ? self::attribute($method, 'Algorithm') : '',
-                    'uri' => $reference instanceof \Dom\Element ? self::attribute($reference, 'URI') : '',
+                    'algorithm' => $method instanceof \Dom\Element ? Element::attribute($method, 'Algorithm') : '',
+                    'uri' => $reference instanceof \Dom\Element ? Element::attribute($reference, 'URI') : '',
                 ];
             }
         }
@@ -174,14 +165,14 @@ final class Epub3Driver extends AbstractDriver
     private function uniqueIdentifier(): ?string
     {
         $packageNode = $this->getPackageNode();
-        $id = self::attribute($packageNode, 'unique-identifier');
-        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        $id = Element::attribute($packageNode, 'unique-identifier');
+        $metadataNode = Element::first($packageNode, 'metadata');
         if ('' === $id || !$metadataNode instanceof \Dom\Element) {
             return null;
         }
 
         foreach ($metadataNode->getElementsByTagNameNS('*', 'identifier') as $node) {
-            if ($id === self::attribute($node, 'id')) {
+            if ($id === Element::attribute($node, 'id')) {
                 return $node->textContent;
             }
         }
@@ -192,7 +183,7 @@ final class Epub3Driver extends AbstractDriver
     private function adobeIdentifierKey(): ?string
     {
         $packageNode = $this->getPackageNode();
-        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        $metadataNode = Element::first($packageNode, 'metadata');
         if (!$metadataNode instanceof \Dom\Element) {
             return null;
         }
@@ -245,26 +236,6 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * Reads an attribute as a string, treating a missing attribute as "".
-     */
-    private static function attribute(\Dom\Element $element, string $name): string
-    {
-        return $element->getAttribute($name) ?? '';
-    }
-
-    /**
-     * @throws ParserException
-     */
-    private function parseXml(string $content): \Dom\XMLDocument
-    {
-        try {
-            return \Dom\XMLDocument::createFromString($content, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        } catch (\DOMException $e) {
-            throw new ParserException(previous: $e);
-        }
-    }
-
-    /**
      * Resolves a (URL-encoded, possibly relative) href to a ZIP entry name.
      * The base defaults to the package directory; pass the containing
      * document directory to resolve references inside content documents.
@@ -305,15 +276,15 @@ final class Epub3Driver extends AbstractDriver
         $manifest = [];
         /** @var \Dom\Element $item */
         foreach ($manifestNode->getElementsByTagNameNS('*', 'item') as $item) {
-            $id = self::attribute($item, 'id');
+            $id = Element::attribute($item, 'id');
             if ('' === $id) {
                 continue;
             }
 
             $manifest[$id] = [
-                'mediaType' => self::attribute($item, 'media-type'),
-                'path' => $this->resolveZipPath(self::attribute($item, 'href')),
-                'properties' => self::attribute($item, 'properties'),
+                'mediaType' => Element::attribute($item, 'media-type'),
+                'path' => $this->resolveZipPath(Element::attribute($item, 'href')),
+                'properties' => Element::attribute($item, 'properties'),
             ];
         }
 
@@ -416,11 +387,11 @@ final class Epub3Driver extends AbstractDriver
         $referenced = [];
         /** @var \Dom\Element $node */
         foreach ($dom->getElementsByTagNameNS('*', '*') as $node) {
-            $isAsset = \in_array(\strtolower($node->localName ?? $node->nodeName), self::ASSET_TAGS, true);
+            $isAsset = \in_array(\strtolower($node->localName ?? $node->nodeName), Tags::ASSET, true);
 
             /** @var \Dom\Attr $attribute */
             foreach ($node->attributes as $attribute) {
-                if (!\in_array(\strtolower($attribute->localName), self::REFERENCE_ATTRIBUTES, true)) {
+                if (!\in_array(\strtolower($attribute->localName), Tags::REFERENCE, true)) {
                     continue;
                 }
 
@@ -497,7 +468,7 @@ final class Epub3Driver extends AbstractDriver
      */
     private function canonicalReference(string $reference, string $baseDir): ?array
     {
-        if ('' === $reference || '#' === $reference[0] || $this->isExternal($reference)) {
+        if ('' === $reference || '#' === $reference[0] || Reference::isExternal($reference)) {
             return null;
         }
 
@@ -515,11 +486,6 @@ final class Epub3Driver extends AbstractDriver
         return [$this->resolveZipPath($reference, $baseDir), $fragment];
     }
 
-    private function isExternal(string $reference): bool
-    {
-        return \str_starts_with($reference, '//') || \preg_match('~^[a-z][a-z0-9+.-]*:~i', $reference) > 0;
-    }
-
     /**
      * @return list<Epub3Section>
      */
@@ -527,17 +493,17 @@ final class Epub3Driver extends AbstractDriver
     public function getSections(): array
     {
         $packageNode = $this->getPackageNode();
-        $version = (int) self::attribute($packageNode, 'version');
+        $version = (int) Element::attribute($packageNode, 'version');
 
         /** @var \Dom\Element|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        $manifestNode = Element::first($packageNode, 'manifest');
         if (!$manifestNode instanceof \Dom\Element) {
             throw new ParserException();
         }
         $manifest = $this->manifestMap($manifestNode);
 
         /** @var \Dom\Element|null $spineNode */
-        $spineNode = $packageNode->getElementsByTagNameNS('*', 'spine')->item(0);
+        $spineNode = Element::first($packageNode, 'spine');
         if (!$spineNode instanceof \Dom\Element) {
             throw new ParserException();
         }
@@ -558,7 +524,7 @@ final class Epub3Driver extends AbstractDriver
             $data = [];
             /** @var \Dom\Element $spinItemNode */
             foreach ($spineNode->getElementsByTagNameNS('*', 'itemref') as $spinItemNode) {
-                $id = self::attribute($spinItemNode, 'idref');
+                $id = Element::attribute($spinItemNode, 'idref');
                 if (!isset($manifest[$id])) {
                     continue;
                 }
@@ -570,7 +536,7 @@ final class Epub3Driver extends AbstractDriver
                     continue;
                 }
 
-                $domFile = $this->parseXml($content);
+                $domFile = Document::parse($content);
 
                 $isNavigation = 2 === $version ? null : false;
                 $properties = \preg_split('/\s+/', $item['properties'], -1, \PREG_SPLIT_NO_EMPTY);
@@ -592,13 +558,13 @@ final class Epub3Driver extends AbstractDriver
                     }
                 }
 
-                $title = $domFile->getElementsByTagNameNS('*', 'title')->item(0)?->textContent;
+                $title = Element::first($domFile, 'title')?->textContent;
                 $text = $domFile->saveXml($domFile->documentElement);
                 if (false === $text) {
                     throw new ParserException();
                 }
 
-                $data[] = new Epub3Section($documentPath, HtmlSanitizer::sanitize($text), $title, $isNavigation, $resources);
+                $data[] = new Epub3Section($documentPath, Sanitizer::sanitize($text), $title, $isNavigation, $resources);
             }
         } finally {
             $zip->close();
@@ -614,7 +580,7 @@ final class Epub3Driver extends AbstractDriver
 
         $packageNode = $this->getPackageNode();
         /** @var \Dom\Element|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        $manifestNode = Element::first($packageNode, 'manifest');
         if (!$manifestNode instanceof \Dom\Element) {
             return null;
         }
@@ -652,11 +618,11 @@ final class Epub3Driver extends AbstractDriver
         $paths = [];
 
         /** @var \Dom\Element|null $metadataNode */
-        $metadataNode = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        $metadataNode = Element::first($packageNode, 'metadata');
         if ($metadataNode instanceof \Dom\Element) {
             foreach ($metadataNode->getElementsByTagNameNS('*', 'meta') as $metaNode) {
-                if ('cover' === self::attribute($metaNode, 'name')) {
-                    $coverId = self::attribute($metaNode, 'content');
+                if ('cover' === Element::attribute($metaNode, 'name')) {
+                    $coverId = Element::attribute($metaNode, 'content');
                     if (isset($manifest[$coverId])) {
                         $paths[] = $manifest[$coverId]['path'];
                     }
@@ -679,11 +645,11 @@ final class Epub3Driver extends AbstractDriver
         }
 
         /** @var \Dom\Element|null $guideNode */
-        $guideNode = $packageNode->getElementsByTagNameNS('*', 'guide')->item(0);
+        $guideNode = Element::first($packageNode, 'guide');
         if ($guideNode instanceof \Dom\Element) {
             foreach ($guideNode->getElementsByTagNameNS('*', 'reference') as $referenceNode) {
-                if (\str_contains(\strtolower(self::attribute($referenceNode, 'type')), 'cover')) {
-                    $href = self::attribute($referenceNode, 'href');
+                if (\str_contains(\strtolower(Element::attribute($referenceNode, 'type')), 'cover')) {
+                    $href = Element::attribute($referenceNode, 'href');
                     if ('' !== $href) {
                         $paths[] = $this->resolveZipPath($href);
                     }
@@ -720,7 +686,7 @@ final class Epub3Driver extends AbstractDriver
         }
 
         try {
-            $dom = $this->parseXml($content);
+            $dom = Document::parse($content);
         } catch (ParserException) {
             return null;
         }
@@ -760,7 +726,7 @@ final class Epub3Driver extends AbstractDriver
     {
         $packageNode = $this->getPackageNode();
         /** @var \Dom\Element|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        $manifestNode = Element::first($packageNode, 'manifest');
         if (!$manifestNode instanceof \Dom\Element) {
             return [];
         }
@@ -770,13 +736,13 @@ final class Epub3Driver extends AbstractDriver
         /** @var \Dom\Element $item */
         foreach ($manifestNode->getElementsByTagNameNS('*', 'item') as $item) {
             if (null === $navHref) {
-                $properties = \preg_split('/\s+/', self::attribute($item, 'properties'), -1, \PREG_SPLIT_NO_EMPTY);
+                $properties = \preg_split('/\s+/', Element::attribute($item, 'properties'), -1, \PREG_SPLIT_NO_EMPTY);
                 if ($properties && \in_array('nav', $properties, true)) {
-                    $navHref = self::attribute($item, 'href');
+                    $navHref = Element::attribute($item, 'href');
                 }
             }
-            if (null === $ncxHref && 'application/x-dtbncx+xml' === self::attribute($item, 'media-type')) {
-                $ncxHref = self::attribute($item, 'href');
+            if (null === $ncxHref && 'application/x-dtbncx+xml' === Element::attribute($item, 'media-type')) {
+                $ncxHref = Element::attribute($item, 'href');
             }
         }
 
@@ -798,7 +764,7 @@ final class Epub3Driver extends AbstractDriver
                     continue;
                 }
                 try {
-                    $dom = $this->parseXml($content);
+                    $dom = Document::parse($content);
                 } catch (ParserException) {
                     continue;
                 }
@@ -830,7 +796,7 @@ final class Epub3Driver extends AbstractDriver
         /** @var \Dom\Element $navNode */
         foreach ($dom->getElementsByTagNameNS('*', 'nav') as $navNode) {
             $fallback ??= $navNode;
-            $type = self::attribute($navNode, 'epub:type');
+            $type = Element::attribute($navNode, 'epub:type');
             if ('' === $type) {
                 $type = $navNode->getAttributeNS('http://www.idpf.org/2007/ops', 'type') ?? '';
             }
@@ -877,7 +843,7 @@ final class Epub3Driver extends AbstractDriver
                 if ($child instanceof \Dom\Element && 'a' === $child->localName) {
                     $title = \mb_trim($child->textContent);
                     if ('' !== $title) {
-                        [$sectionIndex, $anchor] = $this->resolveTarget(self::attribute($child, 'href'), $baseDir, $spineMap);
+                        [$sectionIndex, $anchor] = $this->resolveTarget(Element::attribute($child, 'href'), $baseDir, $spineMap);
                         $entries[] = new TableOfContentsEntry($title, $level, $sectionIndex, $anchor);
                     }
                     break;
@@ -900,7 +866,7 @@ final class Epub3Driver extends AbstractDriver
     private function parseNcx(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
         /** @var \Dom\Element|null $navMap */
-        $navMap = $dom->getElementsByTagNameNS('*', 'navMap')->item(0);
+        $navMap = Element::first($dom, 'navMap');
         if (!$navMap instanceof \Dom\Element) {
             return [];
         }
@@ -922,10 +888,10 @@ final class Epub3Driver extends AbstractDriver
                 continue;
             }
 
-            $text = $navPoint->getElementsByTagNameNS('*', 'text')->item(0)?->textContent;
+            $text = Element::first($navPoint, 'text')?->textContent;
             $title = null === $text ? '' : \mb_trim($text);
             if ('' !== $title) {
-                $src = $navPoint->getElementsByTagNameNS('*', 'content')->item(0)?->getAttribute('src');
+                $src = Element::first($navPoint, 'content')?->getAttribute('src');
                 [$sectionIndex, $anchor] = null === $src ? [null, null] : $this->resolveTarget($src, $baseDir, $spineMap);
                 $entries[] = new TableOfContentsEntry($title, $level, $sectionIndex, $anchor);
             }
@@ -943,9 +909,9 @@ final class Epub3Driver extends AbstractDriver
     {
         $packageNode = $this->getPackageNode();
         /** @var \Dom\Element|null $manifestNode */
-        $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
+        $manifestNode = Element::first($packageNode, 'manifest');
         /** @var \Dom\Element|null $spineNode */
-        $spineNode = $packageNode->getElementsByTagNameNS('*', 'spine')->item(0);
+        $spineNode = Element::first($packageNode, 'spine');
         if (!$manifestNode instanceof \Dom\Element || !$spineNode instanceof \Dom\Element) {
             return [];
         }
@@ -953,14 +919,14 @@ final class Epub3Driver extends AbstractDriver
         $hrefs = [];
         /** @var \Dom\Element $item */
         foreach ($manifestNode->getElementsByTagNameNS('*', 'item') as $item) {
-            $hrefs[self::attribute($item, 'id')] = self::attribute($item, 'href');
+            $hrefs[Element::attribute($item, 'id')] = Element::attribute($item, 'href');
         }
 
         $map = [];
         $index = 0;
         /** @var \Dom\Element $itemref */
         foreach ($spineNode->getElementsByTagNameNS('*', 'itemref') as $itemref) {
-            $id = self::attribute($itemref, 'idref');
+            $id = Element::attribute($itemref, 'idref');
             if (isset($hrefs[$id])) {
                 $map[$this->resolveZipPath($hrefs[$id])] = $index;
             }
@@ -977,7 +943,7 @@ final class Epub3Driver extends AbstractDriver
      */
     private function resolveTarget(string $href, string $baseDir, array $spineMap): array
     {
-        if ('' === $href || $this->isExternal($href)) {
+        if ('' === $href || Reference::isExternal($href)) {
             return [null, null];
         }
 
@@ -1003,11 +969,11 @@ final class Epub3Driver extends AbstractDriver
     {
         $packageNode = $this->getPackageNode();
 
-        $version = (int) self::attribute($packageNode, 'version');
+        $version = (int) Element::attribute($packageNode, 'version');
         if (!\in_array($version, [2, 3], true)) {
             throw new UnsupportedFormatException(\sprintf('Unsupported EPUB version: %d', $version));
         }
-        if (!$packageNode->getElementsByTagNameNS('*', 'metadata')->item(0) instanceof \Dom\Element) {
+        if (!Element::first($packageNode, 'metadata') instanceof \Dom\Element) {
             throw new ParserException();
         }
 
@@ -1031,9 +997,9 @@ final class Epub3Driver extends AbstractDriver
                 throw new ParserException();
             }
 
-            $domContainer = $this->parseXml($container);
+            $domContainer = Document::parse($container);
 
-            $node = $domContainer->getElementsByTagNameNS('*', 'rootfile')->item(0);
+            $node = Element::first($domContainer, 'rootfile');
             if (!$node instanceof \Dom\Element) {
                 throw new ParserException();
             }
@@ -1057,10 +1023,10 @@ final class Epub3Driver extends AbstractDriver
             $zip->close();
         }
 
-        $domPackage = $this->parseXml($package);
+        $domPackage = Document::parse($package);
 
         /** @var \Dom\Element|null $packageNode */
-        $packageNode = $domPackage->getElementsByTagNameNS('*', 'package')->item(0);
+        $packageNode = Element::first($domPackage, 'package');
         if (!$packageNode) {
             throw new ParserException();
         }

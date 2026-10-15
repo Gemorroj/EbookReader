@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Html\Sanitizer;
+use EbookReader\Driver\Html\Title;
 use EbookReader\Driver\Mobi\Font;
 use EbookReader\Driver\Mobi\Index;
 use EbookReader\Driver\Mobi\Kf8;
@@ -201,7 +203,7 @@ final class Azw3Driver extends MobiDriver
             $data = [];
             foreach ($parts as $sectionIndex => $part) {
                 [$html, $resources] = $this->expand($part['html'], $flows, $resolveEmbed, $resolvePos, $sectionIndex);
-                $data[] = new Section($part['name'], $html, self::extractTitle($html), 'text/html', $resources);
+                $data[] = new Section($part['name'], $html, Title::fromHtml($html), 'text/html', $resources);
             }
 
             return $data;
@@ -472,17 +474,6 @@ final class Azw3Driver extends MobiDriver
             $html
         ) ?? $html;
 
-        return [HtmlSanitizer::sanitize($html), $resources];
-    }
-
-    private static function extractTitle(string $html): ?string
-    {
-        if (!\preg_match('~<title\b[^>]*>(.*?)</title>~is', $html, $matches)) {
-            return null;
-        }
-
-        $title = \mb_trim(\html_entity_decode(\strip_tags($matches[1]), \ENT_QUOTES | \ENT_HTML5, 'UTF-8'));
-
-        return '' === $title ? null : $title;
+        return [Sanitizer::sanitize($html), $resources];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Html\Title;
 use EbookReader\Driver\Zip\Assets as ZipAssets;
 use EbookReader\Driver\Zip\CoverFinder as ZipCoverFinder;
 use EbookReader\Driver\Zip\Metadata as ZipMetadata;
@@ -67,7 +68,7 @@ final class HtmlDriver extends AbstractDriver
         $html = $this->readDocument();
 
         return [
-            new Section($this->documentId(), $html, self::extractTitle($html), 'text/html', $this->assets()),
+            new Section($this->documentId(), $html, Title::fromHtml($html), 'text/html', $this->assets()),
         ];
     }
 
@@ -134,7 +135,7 @@ final class HtmlDriver extends AbstractDriver
             return $meta;
         }
 
-        return $meta->withTitle(self::extractTitle($this->readDocument()) ?? '');
+        return $meta->withTitle(Title::fromHtml($this->readDocument()) ?? '');
     }
 
     private function readDocument(): string
@@ -251,16 +252,5 @@ final class HtmlDriver extends AbstractDriver
         }
 
         return null;
-    }
-
-    private static function extractTitle(string $html): ?string
-    {
-        if (1 !== \preg_match('~<title[^>]*>(.*?)</title>~is', $html, $matches)) {
-            return null;
-        }
-
-        $title = \mb_trim(\html_entity_decode(\strip_tags($matches[1]), \ENT_QUOTES | \ENT_HTML5, 'UTF-8'));
-
-        return '' === $title ? null : $title;
     }
 }

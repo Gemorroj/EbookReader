@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Xml\Document;
+use EbookReader\Driver\Xml\Element;
+use EbookReader\Exception\ParserException;
 use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Meta\PublishDate;
 
@@ -23,7 +26,7 @@ final class OpfMetadataReader
     public static function metadata(\Dom\Element $packageNode): Metadata
     {
         /** @var \Dom\Element|null $metadata */
-        $metadata = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        $metadata = Element::first($packageNode, 'metadata');
         [$series, $seriesIndex] = $metadata ? self::series($metadata) : [null, null];
 
         return new Metadata(
@@ -67,8 +70,8 @@ final class OpfMetadataReader
     private static function parse(string $xml): ?\Dom\XMLDocument
     {
         try {
-            return \Dom\XMLDocument::createFromString($xml, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        } catch (\DOMException) {
+            return Document::parse($xml);
+        } catch (ParserException) {
             return null;
         }
     }
@@ -90,7 +93,7 @@ final class OpfMetadataReader
             }
 
             $first ??= $value;
-            $id = self::attr($node, 'id') ?? '';
+            $id = Element::attribute($node, 'id');
             $type = '' === $id ? '' : \strtolower(self::refinedValue($metadata, $id, 'title-type') ?? '');
 
             if (null === $main && \str_contains($type, 'main')) {
@@ -125,9 +128,9 @@ final class OpfMetadataReader
             }
             $all[] = $value;
 
-            $role = self::attr($node, 'opf:role');
-            if (null === $role || '' === $role) {
-                $id = self::attr($node, 'id') ?? '';
+            $role = Element::attribute($node, 'opf:role');
+            if ('' === $role) {
+                $id = Element::attribute($node, 'id');
                 $role = '' === $id ? null : self::refinedValue($metadata, $id, 'role');
             }
             if (null !== $role && 'aut' === \strtolower($role)) {
@@ -152,7 +155,7 @@ final class OpfMetadataReader
             }
         }
         foreach ($identifiers as $node) {
-            if ('ISBN' === self::attr($node, 'opf:scheme')) {
+            if ('ISBN' === Element::attribute($node, 'opf:scheme')) {
                 return \mb_trim($node->textContent);
             }
         }
@@ -172,7 +175,7 @@ final class OpfMetadataReader
                 continue;
             }
             // Prefer the publication date over e.g. a modification date.
-            if ('publication' === \strtolower(self::attr($node, 'opf:event') ?? '')) {
+            if ('publication' === \strtolower(Element::attribute($node, 'opf:event'))) {
                 $value = $candidate;
                 break;
             }
@@ -208,11 +211,11 @@ final class OpfMetadataReader
     private static function series(\Dom\Element $metadata): array
     {
         foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
-            if ('belongs-to-collection' !== self::attr($node, 'property')) {
+            if ('belongs-to-collection' !== Element::attribute($node, 'property')) {
                 continue;
             }
 
-            $id = self::attr($node, 'id') ?? '';
+            $id = Element::attribute($node, 'id');
             if ('' === $id || 'series' !== self::refinedValue($metadata, $id, 'collection-type')) {
                 continue;
             }
@@ -228,7 +231,7 @@ final class OpfMetadataReader
         }
 
         foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
-            if ('calibre:series' === self::attr($node, 'name')) {
+            if ('calibre:series' === Element::attribute($node, 'name')) {
                 $name = self::metaValue($node);
                 if ('' !== $name) {
                     return [$name, self::calibreSeriesIndex($metadata)];
@@ -243,7 +246,7 @@ final class OpfMetadataReader
     private static function calibreSeriesIndex(\Dom\Element $metadata): ?float
     {
         foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
-            if ('calibre:series_index' === self::attr($node, 'name')) {
+            if ('calibre:series_index' === Element::attribute($node, 'name')) {
                 $value = self::metaValue($node);
 
                 return '' !== $value && \is_numeric($value) ? (float) $value : null;
@@ -260,7 +263,7 @@ final class OpfMetadataReader
     {
         $refines = '#'.\ltrim($id, '#');
         foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
-            if ($property === self::attr($node, 'property') && $refines === self::attr($node, 'refines')) {
+            if ($property === Element::attribute($node, 'property') && $refines === Element::attribute($node, 'refines')) {
                 $value = \mb_trim($node->textContent);
 
                 return '' === $value ? null : $value;
@@ -275,7 +278,7 @@ final class OpfMetadataReader
      */
     private static function metaValue(\Dom\Element $node): string
     {
-        $content = self::attr($node, 'content') ?? '';
+        $content = Element::attribute($node, 'content');
         if ('' !== \mb_trim($content)) {
             return \mb_trim($content);
         }
@@ -292,21 +295,21 @@ final class OpfMetadataReader
     {
         $coverId = null;
         foreach ($packageNode->getElementsByTagNameNS('*', 'meta') as $node) {
-            if ('cover' === self::attr($node, 'name')) {
-                $coverId = self::attr($node, 'content');
+            if ('cover' === Element::attribute($node, 'name')) {
+                $coverId = Element::attribute($node, 'content');
                 break;
             }
         }
         if (null !== $coverId) {
             foreach ($packageNode->getElementsByTagNameNS('*', 'item') as $node) {
-                $href = self::attr($node, 'href');
-                if (null !== $href && $coverId === self::attr($node, 'id')) {
+                $href = Element::attribute($node, 'href');
+                if ('' !== $href && $coverId === Element::attribute($node, 'id')) {
                     return $href;
                 }
             }
         }
 
-        $node = $packageNode->getElementsByTagNameNS('*', 'cover-relpath-from-base')->item(0);
+        $node = Element::first($packageNode, 'cover-relpath-from-base');
         $href = null === $node ? '' : \mb_trim($node->textContent);
 
         return '' === $href ? null : $href;
@@ -314,7 +317,7 @@ final class OpfMetadataReader
 
     private static function firstText(\Dom\Element $node, string $localName): ?string
     {
-        $text = $node->getElementsByTagNameNS('*', $localName)->item(0)?->textContent;
+        $text = Element::first($node, $localName)?->textContent;
         $text = null === $text ? null : \mb_trim($text);
 
         return null === $text || '' === $text ? null : $text;
@@ -334,10 +337,5 @@ final class OpfMetadataReader
         }
 
         return $values;
-    }
-
-    private static function attr(\Dom\Element $element, string $name): ?string
-    {
-        return $element->getAttribute($name);
     }
 }

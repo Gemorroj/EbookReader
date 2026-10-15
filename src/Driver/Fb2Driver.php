@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Xml\Reader;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Cover\Cover;
 use EbookReader\Model\Format;
@@ -346,11 +347,7 @@ final class Fb2Driver extends AbstractDriver
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
 
-        /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        if (!$reader) {
-            throw new ParserException();
-        }
+        $reader = Reader::open($file);
 
         $entries = [];
         $sectionIndexes = [];
@@ -655,20 +652,12 @@ final class Fb2Driver extends AbstractDriver
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
 
-        /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        if (!$reader) {
-            throw new ParserException();
-        }
+        $reader = Reader::open($file);
 
         while ($reader->read()) {
             if (\XMLReader::ELEMENT === $reader->nodeType && 'description' === $reader->name) { // first description element
-                /** @var \DOMElement|false $descriptionNode */
-                $descriptionNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
+                $descriptionNode = Reader::expand($reader);
                 $reader->close();
-                if (!$descriptionNode) {
-                    throw new ParserException();
-                }
 
                 return $descriptionNode;
             }
@@ -682,20 +671,12 @@ final class Fb2Driver extends AbstractDriver
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
 
-        /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        if (!$reader) {
-            throw new ParserException();
-        }
+        $reader = Reader::open($file);
 
         while ($reader->read()) {
             if (\XMLReader::ELEMENT === $reader->nodeType && 'stylesheet' === $reader->name) { // first stylesheet element
-                /** @var \DOMElement|false $stylesheetNode */
-                $stylesheetNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
+                $stylesheetNode = Reader::expand($reader);
                 $reader->close();
-                if (!$stylesheetNode) {
-                    throw new ParserException();
-                }
 
                 return $stylesheetNode;
             }
@@ -716,11 +697,7 @@ final class Fb2Driver extends AbstractDriver
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
 
-        /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        if (!$reader) {
-            throw new ParserException();
-        }
+        $reader = Reader::open($file);
 
         try {
             $inBody = false;
@@ -732,13 +709,7 @@ final class Fb2Driver extends AbstractDriver
                     }
 
                     if ($inBody && 'section' === $reader->name) {
-                        /** @var \DOMElement|false $sectionNode */
-                        $sectionNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
-                        if (!$sectionNode) {
-                            throw new ParserException();
-                        }
-
-                        yield $sectionNode;
+                        yield Reader::expand($reader);
                     }
                 } elseif (\XMLReader::END_ELEMENT === $reader->nodeType && 'body' === $reader->name) {
                     $inBody = false;
@@ -753,20 +724,12 @@ final class Fb2Driver extends AbstractDriver
     {
         $file = $this->internalFile ?? $this->makeInternalFile();
 
-        /** @var \XMLReader|false $reader */
-        $reader = @\XMLReader::open($file, 'UTF-8', \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        if (!$reader) {
-            throw new ParserException();
-        }
+        $reader = Reader::open($file);
 
         while ($reader->read()) {
             if (\XMLReader::ELEMENT === $reader->nodeType && 'binary' === $reader->name && $id === $reader->getAttribute('id')) {
-                /** @var \DOMElement|false $binaryNode */
-                $binaryNode = $reader->expand(new \DOMDocument('1.0', 'UTF-8'));
+                $binaryNode = Reader::expand($reader);
                 $reader->close();
-                if (!$binaryNode) {
-                    throw new ParserException();
-                }
 
                 return $binaryNode;
             }

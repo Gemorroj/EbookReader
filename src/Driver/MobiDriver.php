@@ -8,6 +8,7 @@ use EbookReader\Decompressor\DecompressorInterface;
 use EbookReader\Decompressor\HuffCdic;
 use EbookReader\Decompressor\NoCompression;
 use EbookReader\Decompressor\PalmDocLz77;
+use EbookReader\Driver\Html\Sanitizer;
 use EbookReader\Driver\Mobi\Font;
 use EbookReader\Driver\Mobi\Index;
 use EbookReader\Exception\EncryptedBookException;
@@ -171,7 +172,7 @@ class MobiDriver extends AbstractDriver
         $text = \preg_replace('~<mbp:pagebreak\s*/?>~i', '<hr/>', $text) ?? $text;
         $text = \preg_replace('~</?mbp:[a-z0-9_:-]+[^>]*>~i', '', $text) ?? $text;
 
-        return HtmlSanitizer::sanitize($text);
+        return Sanitizer::sanitize($text);
     }
 
     /**

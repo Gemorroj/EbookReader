@@ -446,6 +446,38 @@ final class Epub3DriverTest extends TestCase
         }
     }
 
+    public function testIframeAndPosterReferencesAreResolved(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="text/ch.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="other" href="other.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="img" href="images/p.png" media-type="image/png"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'text/ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                .'<iframe src="../other.xhtml"></iframe><video poster="../images/p.png"></video>'
+                .'</body></html>',
+            'other.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>f</body></html>',
+            'images/p.png' => 'PNG',
+        ]);
+
+        try {
+            $section = new Epub3Driver($file)->getSections()[0];
+            $content = $section->getContent();
+
+            self::assertStringContainsString('src="other.xhtml"', $content);
+            self::assertStringContainsString('poster="images/p.png"', $content);
+
+            $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $section->getResources());
+            self::assertContains('images/p.png', $paths);
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testScriptsAndRemoteReferencesAreRemoved(): void
     {
         $file = self::makeEpub([
