@@ -6,13 +6,13 @@
 
 
 ### Formats:
-| Format | Versions | Cover | Assets | Table of contents | Content |
+| Format | Variants | Cover | Assets | Table of contents | Content |
 | --- | --- | --- | --- | --- | --- |
 | EPUB | 2 and 3 | yes | images, styles, fonts | yes (anchors) | self-contained XHTML |
 | MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | images | yes (positions) | HTML |
 | AZW3 | standalone and joint KF8 | yes | images, fonts | yes (positions) | HTML (flows inlined) |
 | FB2 | 2.x, plain or ZIP | yes | images | yes | HTML (styles inlined) |
-| HTML | single file or `htmlz` ZIP | ZIP only | images, styles, fonts (ZIP) | headings | HTML |
+| HTML | single file or ZIP (`htmlz`) | ZIP only | images, styles, fonts (ZIP) | headings | HTML |
 | TXT | plain or ZIP (`txtz`) | ZIP only | - | chapters | plain text |
 
 Every format is read through the same interface. `EbookReaderFactory::create()` detects the format automatically; the returned reader exposes metadata, cover, table of contents, content sections and their assets.
@@ -107,7 +107,7 @@ foreach ($book->getTableOfContents() as $entry) { // EbookReader\Model\TableOfCo
     echo str_repeat('  ', $entry->getLevel() - 1).$entry->getTitle();
 
     $entry->getSectionIndex();   // index into getSections(), or null
-    $entry->getAnchor();         // element id inside the section (EPUB), or null
+    $entry->getAnchor();         // element id inside the section (EPUB, HTML), or null
     $entry->getPosition();       // byte offset inside the section (MOBI/KF8), or null
 }
 ```
@@ -129,7 +129,7 @@ EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatExcept
 
 #### Encodings
 
-All text is returned as UTF-8. Formats that declare their charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for the rest (TXT, HTML) the decoder is configurable:
+All text is returned as UTF-8. Formats that declare a charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for TXT and HTML the decoder is configurable (detected by default):
 
 ```php
 use EbookReader\Text\TextDecoder;
@@ -139,11 +139,11 @@ EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::strict());     
 EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::fallback('Windows-1252'));
 ```
 
-Detection picks the most plausible candidate (Cyrillic, Latin and Chinese legacy encodings, GB18030 as the CJK catch-all) and refuses binary data rather than guessing. Declare other CJK charsets (Big5, Shift_JIS, EUC-KR) explicitly via `fallback()`.
+Detection covers legacy Cyrillic/Latin and Chinese (GB18030) and refuses binary data; other CJK charsets (Big5, Shift_JIS, EUC-KR) must be declared with `fallback()`.
 
 ### Limitations:
 - DRM-protected books are not supported.
-- HTML: a single file, or an "htmlz" ZIP (the index document is read, its images/fonts/stylesheets are exposed as resources, and title/author/cover come from a `metadata.opf` when present); the table of contents is derived from the document headings (h1..h3) — HTML book layout is not standardised.
-- TXT: chapters are detected with a conservative keyword heuristic (English/Russian), and become sections and table-of-contents entries; a ZIP ("txtz") is read as all of its text files joined, with title/author/cover taken from `metadata.opf` when present.
+- HTML layout is not standardised: only the index document of a ZIP is read, and the table of contents is guessed from headings (h1..h3).
+- TXT has no markup: chapters are guessed from keywords (English/Russian).
 - AZW3 supports standalone and joint MOBI6 + KF8 files.
-- Internal `kindle:pos:` (KF8) file-position links are not converted to anchors; EPUB `@import` chains in stylesheets are not resolved.
+- KF8 `kindle:pos:` links are not converted to anchors; EPUB `@import` chains are not resolved.
