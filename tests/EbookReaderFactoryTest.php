@@ -8,6 +8,7 @@ use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\Epub3Driver;
 use EbookReader\Driver\Fb2Driver;
 use EbookReader\Driver\HtmlDriver;
+use EbookReader\Driver\MarkdownDriver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Driver\TxtDriver;
 use EbookReader\EbookReaderFactory;
@@ -80,6 +81,23 @@ final class EbookReaderFactoryTest extends TestCase
 
     public function testCreateTxt(): void
     {
+        $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/txt-utf8.txt');
+        self::assertInstanceOf(TxtDriver::class, $txt);
+    }
+
+    public function testCreateMarkdown(): void
+    {
+        $markdown = EbookReaderFactory::create(__DIR__.'/fixtures/markdown/markdown-book.md');
+        self::assertInstanceOf(MarkdownDriver::class, $markdown);
+        self::assertSame(Format::MARKDOWN, $markdown->getFormat());
+
+        // Markdown inside a ZIP (Calibre "txtz" semantics).
+        $zip = EbookReaderFactory::create(__DIR__.'/fixtures/markdown/markdown-cover.zip');
+        self::assertInstanceOf(MarkdownDriver::class, $zip);
+        self::assertSame(Format::MARKDOWN, $zip->getFormat());
+        self::assertSame('text/markdown', $zip->getSections()[0]->getMediaType());
+
+        // Plain prose (Setext underline included) still reads as TXT.
         $txt = EbookReaderFactory::create(__DIR__.'/fixtures/txt/txt-utf8.txt');
         self::assertInstanceOf(TxtDriver::class, $txt);
     }

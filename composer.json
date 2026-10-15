@@ -1,7 +1,7 @@
 {
     "name": "gemorroj/ebook-reader",
     "description": "E-books reader",
-    "keywords": ["ebook", "reader", "mobi", "azw3", "kf8", "kindle", "epub", "fb2", "html", "htmlz", "txt", "txtz", "prc"],
+    "keywords": ["ebook", "reader", "mobi", "azw3", "kf8", "kindle", "epub", "fb2", "html", "htmlz", "markdown", "md", "txt", "txtz", "prc"],
     "type": "library",
     "license": "LGPL-3.0-or-later",
     "authors": [

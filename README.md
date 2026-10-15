@@ -13,6 +13,7 @@
 | AZW3 | standalone and joint KF8 | yes | images, fonts | yes (positions) | HTML (flows inlined) |
 | FB2 | 2.x, plain or ZIP | yes | images | yes | HTML (styles inlined) |
 | HTML | single file or ZIP (`htmlz`) | ZIP only | images, styles, fonts (ZIP) | headings | HTML |
+| Markdown | `.md`/`.markdown`, or ZIP (`txtz`) | ZIP only | images, styles, fonts (ZIP) | headings | Markdown source |
 | TXT | plain or ZIP (`txtz`) | ZIP only | - | chapters | plain text |
 
 Every format is read through the same interface. `EbookReaderFactory::create()` detects the format automatically; the returned reader exposes metadata, cover, table of contents, content sections and their assets.
@@ -129,7 +130,7 @@ EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatExcept
 
 #### Encodings
 
-All text is returned as UTF-8. Formats that declare a charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for TXT and HTML the decoder is configurable (detected by default):
+All text is returned as UTF-8. Formats that declare a charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for TXT, Markdown and HTML the decoder is configurable (detected by default):
 
 ```php
 use EbookReader\Text\TextDecoder;
@@ -145,5 +146,6 @@ Detection covers legacy Cyrillic/Latin and Chinese (GB18030) and refuses binary 
 - DRM-protected books are not supported.
 - HTML layout is not standardised: only the index document of a ZIP is read, and the table of contents is guessed from headings (h1..h3).
 - TXT has no markup: chapters are guessed from keywords (English/Russian).
+- Markdown is exposed as its source (`text/markdown`), not converted to HTML; the table of contents comes from ATX/Setext headings, and detection is heuristic (a document needs a heading, a fenced code block, a link/image or a table, so prose-only or Setext-only files read as TXT).
 - AZW3 supports standalone and joint MOBI6 + KF8 files.
 - KF8 `kindle:pos:` links are not converted to anchors; EPUB `@import` chains are not resolved.
