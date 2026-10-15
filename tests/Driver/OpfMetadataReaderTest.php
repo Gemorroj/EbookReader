@@ -83,6 +83,85 @@ final class OpfMetadataReaderTest extends TestCase
         self::assertTrue($meta->getPublishDate()->isEmpty());
     }
 
+    public function testSeriesFromCalibreMetas(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<meta name="calibre:series" content="My Series"/>'
+            .'<meta name="calibre:series_index" content="1.5"/></metadata><spine/></package>'
+        );
+
+        self::assertSame('My Series', $meta->getSeries());
+        self::assertSame(1.5, $meta->getSeriesIndex());
+    }
+
+    public function testSeriesFromBelongsToCollection(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<meta property="belongs-to-collection" id="c1">Saga</meta>'
+            .'<meta refines="#c1" property="collection-type">series</meta>'
+            .'<meta refines="#c1" property="group-position">2</meta>'
+            .'</metadata><spine/></package>'
+        );
+
+        self::assertSame('Saga', $meta->getSeries());
+        self::assertSame(2.0, $meta->getSeriesIndex());
+    }
+
+    #[DataProvider('ignoredCollectionProvider')]
+    public function testIgnoredCollections(string $metadata): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'.$metadata.'</metadata><spine/></package>'
+        );
+
+        self::assertNull($meta->getSeries());
+        self::assertNull($meta->getSeriesIndex());
+    }
+
+    public static function ignoredCollectionProvider(): \Generator
+    {
+        // A collection that is not a series.
+        yield 'other type' => [
+            '<meta property="belongs-to-collection" id="c1">Boxed Set</meta>'
+            .'<meta refines="#c1" property="collection-type">set</meta>',
+        ];
+        // No collection-type: not treated as a series (matches calibre).
+        yield 'no type' => [
+            '<meta property="belongs-to-collection" id="c1">Something</meta>',
+        ];
+    }
+
+    public function testSeriesFromCalibreTextFallback(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<meta name="calibre:series">Fallback Series</meta></metadata><spine/></package>'
+        );
+
+        self::assertSame('Fallback Series', $meta->getSeries());
+        self::assertNull($meta->getSeriesIndex());
+    }
+
+    public function testSeriesWithoutGroupPosition(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<meta property="belongs-to-collection" id="c1">Saga</meta>'
+            .'<meta refines="#c1" property="collection-type">series</meta>'
+            .'</metadata><spine/></package>'
+        );
+
+        self::assertSame('Saga', $meta->getSeries());
+        self::assertNull($meta->getSeriesIndex());
+    }
+
     public function testCoverFromRelpath(): void
     {
         $xml = '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf">'

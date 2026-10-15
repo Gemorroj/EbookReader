@@ -41,4 +41,14 @@ interface EbookMetaInterface
     public function getLanguage(): ?string;
 
     public function getLicense(): ?string;
+
+    /**
+     * Book series name, or null.
+     */
+    public function getSeries(): ?string;
+
+    /**
+     * Position within the series (may be fractional, e.g. 1.5), or null.
+     */
+    public function getSeriesIndex(): ?float;
 }

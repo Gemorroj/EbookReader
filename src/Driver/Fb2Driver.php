@@ -390,6 +390,7 @@ final class Fb2Driver extends AbstractDriver
         $language = $this->makeLanguage($titleInfoNode);
         $publishYear = $this->makePublishYear($publishNodeInfo);
         $subjects = $this->makeSubjects($titleInfoNode);
+        [$series, $seriesIndex] = $this->makeSeries($titleInfoNode);
 
         return new Metadata(
             title: $title,
@@ -401,7 +402,30 @@ final class Fb2Driver extends AbstractDriver
             subjects: $subjects,
             license: null,
             publishDate: new PublishDate($publishYear),
+            series: $series,
+            seriesIndex: $seriesIndex,
         );
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?float}
+     */
+    protected function makeSeries(\DOMElement $titleInfoNode): array
+    {
+        /** @var \DOMElement|null $sequenceNode */
+        $sequenceNode = $titleInfoNode->getElementsByTagName('sequence')->item(0);
+        if (null === $sequenceNode) {
+            return [null, null];
+        }
+
+        $name = \mb_trim($sequenceNode->getAttribute('name'));
+        if ('' === $name) {
+            return [null, null];
+        }
+
+        $number = \mb_trim($sequenceNode->getAttribute('number'));
+
+        return [$name, '' !== $number && \is_numeric($number) ? (float) $number : null];
     }
 
     /**

@@ -111,6 +111,46 @@ final class Fb2DriverTest extends TestCase
         self::assertSame(['literature_20', 'prose_su_classics', 'poetry'], $meta->getSubjects());
     }
 
+    public function testMetaSeries(): void
+    {
+        $meta = new Fb2Driver(__DIR__.'/../fixtures/fb2/fb2-cyrillic.fb2')->getMeta();
+
+        self::assertSame('Классика для школьников', $meta->getSeries());
+        self::assertNull($meta->getSeriesIndex());
+    }
+
+    #[DataProvider('seriesProvider')]
+    public function testMetaSeriesIndex(string $sequence, ?string $expectedSeries, ?float $expectedIndex): void
+    {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+            .'<description><title-info><book-title>T</book-title>'
+            .'<author><first-name>A</first-name><last-name>B</last-name></author><lang>en</lang>'
+            .$sequence.'</title-info></description>'
+            .'<body><section><p>x</p></section></body></FictionBook>';
+
+        $file = \tempnam(\sys_get_temp_dir(), 'fb2');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $xml);
+
+        try {
+            $meta = new Fb2Driver($file)->getMeta();
+            self::assertSame($expectedSeries, $meta->getSeries());
+            self::assertSame($expectedIndex, $meta->getSeriesIndex());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public static function seriesProvider(): \Generator
+    {
+        yield 'name and number' => ['<sequence name="Saga" number="2.5"/>', 'Saga', 2.5];
+        yield 'name only' => ['<sequence name="Saga"/>', 'Saga', null];
+        yield 'number without name' => ['<sequence number="2"/>', null, null];
+        yield 'non-numeric number' => ['<sequence name="Saga" number="abc"/>', 'Saga', null];
+        yield 'absent' => ['', null, null];
+    }
+
     public function testInlineImageResources(): void
     {
         $driver = new Fb2Driver(__DIR__.'/../fixtures/fb2/fb2-inline-image.fb2');

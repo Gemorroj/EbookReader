@@ -73,6 +73,8 @@ $meta->getLanguage();
 $meta->getIsbn();
 $meta->getDescription();
 $meta->getPublishDate();                  // EbookReader\Model\Meta\PublishDate (getYear/getMonth/getDay/isEmpty)
+$meta->getSeries();                       // series name, or null
+$meta->getSeriesIndex();                  // position in the series (float), or null
 
 $cover = $book->getCover();               // ?EbookReader\Model\Cover\EbookCoverInterface
 if (null !== $cover) {

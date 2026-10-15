@@ -187,6 +187,30 @@ final class Epub3DriverTest extends TestCase
         self::assertContains('Children -- Books and reading', $meta->getSubjects());
     }
 
+    public function testMetaSeries(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>',
+                '<itemref idref="ch"/>',
+                '<dc:title>T</dc:title>'
+                .'<meta name="calibre:series" content="Saga"/>'
+                .'<meta name="calibre:series_index" content="3"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><body>x</body></html>',
+        ]);
+
+        try {
+            $meta = new Epub3Driver($file)->getMeta();
+            self::assertSame('Saga', $meta->getSeries());
+            self::assertSame(3.0, $meta->getSeriesIndex());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testEncodedAndRelativeHref(): void
     {
         $driver = new Epub3Driver(__DIR__.'/../fixtures/epub/epub3-encoded-href.epub');

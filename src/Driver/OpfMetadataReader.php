@@ -24,6 +24,7 @@ final class OpfMetadataReader
     {
         /** @var \Dom\Element|null $metadata */
         $metadata = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
+        [$series, $seriesIndex] = $metadata ? self::series($metadata) : [null, null];
 
         return new Metadata(
             title: $metadata ? self::title($metadata) : '',
@@ -35,6 +36,8 @@ final class OpfMetadataReader
             subjects: $metadata ? self::texts($metadata, 'subject') : [],
             license: $metadata ? self::firstText($metadata, 'rights') : null,
             publishDate: $metadata ? self::date($metadata) : new PublishDate(),
+            series: $series,
+            seriesIndex: $seriesIndex,
         );
     }
 
@@ -154,6 +157,90 @@ final class OpfMetadataReader
         }
 
         return new PublishDate((int) $date->format('Y'), (int) $date->format('m'), (int) $date->format('d'));
+    }
+
+    /**
+     * Series name and position: Calibre's `calibre:series` metas, or an EPUB3
+     * `belongs-to-collection` refined with `collection-type` = "series".
+     *
+     * @return array{0: ?string, 1: ?float}
+     */
+    private static function series(\Dom\Element $metadata): array
+    {
+        foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
+            if ('belongs-to-collection' !== self::attr($node, 'property')) {
+                continue;
+            }
+
+            $id = self::attr($node, 'id') ?? '';
+            if ('' === $id || 'series' !== self::refinedValue($metadata, $id, 'collection-type')) {
+                continue;
+            }
+
+            $name = \mb_trim($node->textContent);
+            if ('' === $name) {
+                continue;
+            }
+
+            $position = self::refinedValue($metadata, $id, 'group-position');
+
+            return [$name, null !== $position && \is_numeric($position) ? (float) $position : null];
+        }
+
+        foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
+            if ('calibre:series' === self::attr($node, 'name')) {
+                $name = self::metaValue($node);
+                if ('' !== $name) {
+                    return [$name, self::calibreSeriesIndex($metadata)];
+                }
+                break;
+            }
+        }
+
+        return [null, null];
+    }
+
+    private static function calibreSeriesIndex(\Dom\Element $metadata): ?float
+    {
+        foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
+            if ('calibre:series_index' === self::attr($node, 'name')) {
+                $value = self::metaValue($node);
+
+                return '' !== $value && \is_numeric($value) ? (float) $value : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The value of a `<meta property="...">` that refines the #id element.
+     */
+    private static function refinedValue(\Dom\Element $metadata, string $id, string $property): ?string
+    {
+        $refines = '#'.\ltrim($id, '#');
+        foreach ($metadata->getElementsByTagNameNS('*', 'meta') as $node) {
+            if ($property === self::attr($node, 'property') && $refines === self::attr($node, 'refines')) {
+                $value = \mb_trim($node->textContent);
+
+                return '' === $value ? null : $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A meta's `content` attribute, falling back to its text.
+     */
+    private static function metaValue(\Dom\Element $node): string
+    {
+        $content = self::attr($node, 'content') ?? '';
+        if ('' !== \mb_trim($content)) {
+            return \mb_trim($content);
+        }
+
+        return \mb_trim($node->textContent);
     }
 
     /**

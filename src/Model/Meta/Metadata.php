@@ -24,6 +24,8 @@ final readonly class Metadata implements EbookMetaInterface
         private array $subjects = [],
         private ?string $license = null,
         private PublishDate $publishDate = new PublishDate(),
+        private ?string $series = null,
+        private ?float $seriesIndex = null,
     ) {
     }
 
@@ -93,6 +95,18 @@ final readonly class Metadata implements EbookMetaInterface
         return $this->publishDate;
     }
 
+    #[\Override]
+    public function getSeries(): ?string
+    {
+        return $this->series;
+    }
+
+    #[\Override]
+    public function getSeriesIndex(): ?float
+    {
+        return $this->seriesIndex;
+    }
+
     /**
      * A copy with the title replaced; used when a format derives the title from
      * its content because the metadata does not declare one.
@@ -109,6 +123,8 @@ final readonly class Metadata implements EbookMetaInterface
             $this->subjects,
             $this->license,
             $this->publishDate,
+            $this->series,
+            $this->seriesIndex,
         );
     }
 }
