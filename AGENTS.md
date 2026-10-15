@@ -1,11 +1,6 @@
 # AGENTS.md
 
-PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, HTML, TXT). PHP >= 8.4 with ext-zip, ext-dom, ext-xmlreader, ext-libxml, ext-mbstring.
-
-## Structure
-
-- `src/` — PSR-4 `EbookReader\`
-- `tests/` — PHPUnit `EbookReader\Tests\`; mirrors `src/`
+E-book reader library: EPUB, MOBI, AZW3/KF8, FB2, HTML/HTMLZ, Markdown, TXT/TXTZ. PHP >= 8.4 + ext-zip, ext-dom, ext-xmlreader, ext-libxml, ext-mbstring, ext-zlib.
 
 ## Commands
 
@@ -16,8 +11,10 @@ PHP library for reading e-books (EPUB, MOBI, AZW3/KF8, FB2, HTML, TXT). PHP >= 8
 
 ## Conventions
 
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
-- Symfony style is the reference (`.php-cs-fixer.dist.php` extends `@Symfony` / `@Symfony:risky`); don't deviate without reason.
-- All text a driver returns (content, metadata, table of contents) must be UTF-8 — convert from the source charset, never leak raw non-UTF-8 bytes.
-- Array shapes are closed: every key is always present; unknown values are null (never `key?: type`).
-- Add tests for new behavior.
+- Conventional Commits.
+- Symfony CS (`@Symfony` / `@Symfony:risky`).
+- Match calibre semantics (metadata, TOC, cover, content).
+- Driver output (content, metadata, TOC) always UTF-8.
+- Sections self-contained: refs normalized to `Resource::getPath()`, no `<script>`/remote.
+- Closed array shapes: all keys present, unknown = null.
+- Tests for new behavior.
