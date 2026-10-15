@@ -120,7 +120,7 @@ foreach ($book->getResources() as $resource) { // EbookReader\Model\Resource\Ebo
 #### Table of contents
 
 ```php
-foreach ($book->getTableOfContents() as $entry) { // EbookReader\Model\TableOfContents\TableOfContents[]
+foreach ($book->getTableOfContents() as $entry) { // EbookReader\Model\TableOfContents\TableOfContentsEntry[]
     echo str_repeat('  ', $entry->getLevel() - 1).$entry->getTitle();
 
     $entry->getSectionIndex();   // index into getSections(), or null
@@ -151,7 +151,7 @@ EbookReaderFactory::create('unknown.bin');     // throws UnsupportedFormatExcept
 All text is returned as UTF-8. Formats that declare a charset (MOBI/KF8, EPUB, FB2) are decoded automatically; for TXT, Markdown and HTML the decoder is configurable (detected by default):
 
 ```php
-use EbookReader\Text\TextDecoder;
+use EbookReader\Encoding\TextDecoder;
 
 EbookReaderFactory::create('book.txt');                                        // detect the charset (default)
 EbookReaderFactory::create('book.txt', textDecoder: TextDecoder::strict());     // reject undeclared non-UTF-8

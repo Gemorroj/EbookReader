@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Zip\Assets as ZipAssets;
+use EbookReader\Driver\Zip\CoverFinder as ZipCoverFinder;
+use EbookReader\Driver\Zip\Metadata as ZipMetadata;
+use EbookReader\Driver\Zip\Reader as ZipReader;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Cover\Cover;
 use EbookReader\Model\Format;
-use EbookReader\Model\Meta\HtmlMeta;
-use EbookReader\Model\Meta\OpfMeta;
+use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Resource\Resource as EbookResource;
-use EbookReader\Model\Resource\ResourceType;
-use EbookReader\Model\Section\HtmlSection;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\Section\Section;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 /**
  * Plain HTML documents: a single .html/.htm/.xhtml file, or an "htmlz" (a ZIP
@@ -57,7 +59,7 @@ final class HtmlDriver extends AbstractDriver
     }
 
     /**
-     * @return list<HtmlSection>
+     * @return list<Section>
      */
     #[\Override]
     public function getSections(): array
@@ -65,56 +67,30 @@ final class HtmlDriver extends AbstractDriver
         $html = $this->readDocument();
 
         return [
-            new HtmlSection($this->documentId(), $html, self::extractTitle($html), $this->assets()),
+            new Section($this->documentId(), $html, self::extractTitle($html), 'text/html', $this->assets()),
         ];
     }
 
     #[\Override]
     public function getCover(): ?Cover
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null === $zip) {
             return null;
         }
 
         try {
-            $content = $zip->getFromName('metadata.opf');
-            $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
-
-            $names = [];
-            $coverHref = $opf->getCoverHref();
-            if (null !== $coverHref) {
-                $names[] = $coverHref;
-            }
-            for ($i = 0; $i < $zip->numFiles; ++$i) {
-                $name = $zip->getNameIndex($i);
-                if (false !== $name && \in_array(\pathinfo($name, \PATHINFO_FILENAME), self::COVER_FILENAMES, true)) {
-                    $names[] = $name;
-                }
-            }
-
-            foreach ($names as $name) {
-                $data = $zip->getFromName($name);
-                if (false === $data) {
-                    continue;
-                }
-                $mime = $this->getMimeDetector()->detect($data);
-                if ($mime) {
-                    return new Cover($data, $mime);
-                }
-            }
+            return new ZipCoverFinder($this->getMimeDetector())->find($zip, self::COVER_FILENAMES);
         } finally {
             $zip->close();
         }
-
-        return null;
     }
 
     /**
      * Derived from the document headings (h1..h3): level = tag level, anchor =
      * element id. There is no attempt to locate a "real" table of contents.
      *
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -135,57 +111,42 @@ final class HtmlDriver extends AbstractDriver
             }
 
             $anchor = $node->getAttribute('id');
-            $toc[] = new TableOfContents($title, (int) \substr($node->tagName, 1), 0, '' === $anchor ? null : $anchor);
+            $toc[] = new TableOfContentsEntry($title, (int) \substr($node->tagName, 1), 0, '' === $anchor ? null : $anchor);
         }
 
         return $toc;
     }
 
     #[\Override]
-    public function getMeta(): HtmlMeta
+    public function getMeta(): Metadata
     {
-        $content = false;
-        $zip = $this->openZip();
-        if (null !== $zip) {
+        $zip = ZipReader::open($this->getFile());
+        if (null === $zip) {
+            $meta = new Metadata();
+        } else {
             try {
-                $content = $zip->getFromName('metadata.opf');
+                $meta = new ZipMetadata($zip)->metadata();
             } finally {
                 $zip->close();
             }
         }
-        $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
-
-        $title = $opf->getTitle();
-        if ('' === $title) {
-            $title = self::extractTitle($this->readDocument()) ?? '';
+        if ('' !== $meta->getTitle()) {
+            return $meta;
         }
 
-        return new HtmlMeta(
-            title: $title,
-            authors: $opf->getAuthors(),
-            publisher: $opf->getPublisher(),
-            isbn: $opf->getIsbn(),
-            description: $opf->getDescription(),
-            language: $opf->getLanguage(),
-            subjects: $opf->getSubjects(),
-            license: $opf->getLicense(),
-            publishDate: $opf->getPublishDate(),
-        );
+        return $meta->withTitle(self::extractTitle($this->readDocument()) ?? '');
     }
 
     private function readDocument(): string
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null !== $zip) {
             try {
                 $entry = $this->htmlEntry($zip);
                 if (null === $entry) {
                     throw new ParserException();
                 }
-                $bytes = $zip->getFromName($entry);
-                if (false === $bytes) {
-                    throw new ParserException();
-                }
+                $bytes = $zip->read($entry);
             } finally {
                 $zip->close();
             }
@@ -201,48 +162,30 @@ final class HtmlDriver extends AbstractDriver
 
     private function readHead(int $size): string
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null !== $zip) {
             try {
                 $entry = $this->htmlEntry($zip);
                 if (null === $entry) {
                     throw new ParserException();
                 }
-                $head = $this->readEntryHead($entry, $size);
+                $head = $zip->head($entry, $size);
             } finally {
                 $zip->close();
             }
         } else {
             $head = @\file_get_contents($this->getFile(), false, null, 0, \max(0, $size));
-        }
-
-        if (false === $head) {
-            throw new ParserException();
+            if (false === $head) {
+                throw new ParserException();
+            }
         }
 
         return $head;
     }
 
-    /**
-     * @return string|false
-     */
-    private function readEntryHead(string $entry, int $size)
-    {
-        $stream = @\fopen('zip://'.$this->getFile().'#'.$entry, 'r');
-        if (false === $stream) {
-            return false;
-        }
-
-        try {
-            return \fread($stream, \max(1, $size));
-        } finally {
-            \fclose($stream);
-        }
-    }
-
     private function documentId(): string
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null === $zip) {
             return '0';
         }
@@ -261,7 +204,7 @@ final class HtmlDriver extends AbstractDriver
      */
     private function assets(): array
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null === $zip) {
             return [];
         }
@@ -269,52 +212,20 @@ final class HtmlDriver extends AbstractDriver
         try {
             $document = $this->htmlEntry($zip);
 
-            $resources = [];
-            for ($i = 0; $i < $zip->numFiles; ++$i) {
-                $name = $zip->getNameIndex($i);
-                if (false === $name || $name === $document) {
-                    continue;
-                }
-                $data = $zip->getFromIndex($i);
-                if (false === $data) {
-                    continue;
-                }
-                $mime = $this->getMimeDetector()->detect($data) ?? self::extensionMime(\pathinfo($name, \PATHINFO_EXTENSION));
-                if (null === $mime || ResourceType::OTHER === ResourceType::fromMime($mime)) {
-                    continue;
-                }
-                $resources[] = new EbookResource($name, $data, $mime);
-            }
-
-            return $resources;
+            return new ZipAssets($this->getMimeDetector())->collect($zip, excludeNames: null === $document ? [] : [$document]);
         } finally {
             $zip->close();
         }
-    }
-
-    private function openZip(): ?\ZipArchive
-    {
-        $zip = new \ZipArchive();
-        if (true !== $zip->open($this->getFile(), \ZipArchive::RDONLY)) {
-            return null;
-        }
-
-        return $zip;
     }
 
     /**
      * The entry holding the document: index.* when present (Calibre HTMLZ), else
      * the naturally-first HTML entry.
      */
-    private function htmlEntry(\ZipArchive $zip): ?string
+    private function htmlEntry(ZipReader $zip): ?string
     {
         $candidates = [];
-        for ($i = 0; $i < $zip->numFiles; ++$i) {
-            $name = $zip->getNameIndex($i);
-            if (false === $name) {
-                continue;
-            }
-
+        foreach ($zip->allEntries() as $name) {
             if (!\in_array(\strtolower(\pathinfo($name, \PATHINFO_EXTENSION)), self::HTML_EXTENSIONS, true)) {
                 continue;
             }
@@ -331,23 +242,6 @@ final class HtmlDriver extends AbstractDriver
         \usort($candidates, static fn (string $a, string $b): int => \strnatcasecmp($a, $b));
 
         return $candidates[0];
-    }
-
-    /**
-     * MIME types the content detector cannot recognise (text/CSS), guessed from
-     * the entry extension.
-     */
-    private static function extensionMime(string $extension): ?string
-    {
-        return match (\strtolower($extension)) {
-            'css' => 'text/css',
-            'svg' => 'image/svg+xml',
-            'ttf' => 'font/ttf',
-            'otf' => 'font/otf',
-            'woff' => 'font/woff',
-            'woff2' => 'font/woff2',
-            default => null,
-        };
     }
 
     private static function declaredCharset(string $bytes): ?string

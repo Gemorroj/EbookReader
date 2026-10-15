@@ -8,7 +8,7 @@ use EbookReader\Driver\MarkdownDriver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Format;
 use EbookReader\Model\Resource\EbookResourceInterface;
-use EbookReader\Model\Section\MarkdownSection;
+use EbookReader\Model\Section\Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -60,7 +60,7 @@ final class MarkdownDriverTest extends TestCase
 
         self::assertCount(1, $sections);
 
-        /** @var MarkdownSection $section */
+        /** @var Section $section */
         $section = $sections[0];
         self::assertSame('0', $section->getId());
         self::assertSame($expectedTitle, $section->getTitle());
@@ -98,7 +98,7 @@ final class MarkdownDriverTest extends TestCase
 
         self::assertCount(1, $sections);
 
-        /** @var MarkdownSection $section */
+        /** @var Section $section */
         $section = $sections[0];
         self::assertSame('The Book of Markdown', $section->getTitle());
         // A fenced code block is part of the source, not a heading.

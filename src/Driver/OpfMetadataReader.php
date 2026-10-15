@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
-use EbookReader\Model\Meta\OpfMeta;
+use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Meta\PublishDate;
 
 /**
@@ -15,17 +15,17 @@ use EbookReader\Model\Meta\PublishDate;
  * Calibre's HTMLZ and TXTZ carry. EPUB-only parts (manifest, spine, nav/ncx)
  * stay in {@see Epub3Driver}.
  */
-final class OpfReader
+final class OpfMetadataReader
 {
     /**
      * @param \Dom\Element $packageNode the `<package>` element
      */
-    public static function metadata(\Dom\Element $packageNode): OpfMeta
+    public static function metadata(\Dom\Element $packageNode): Metadata
     {
         /** @var \Dom\Element|null $metadata */
         $metadata = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
 
-        return new OpfMeta(
+        return new Metadata(
             title: $metadata ? self::title($metadata) : '',
             authors: $metadata ? self::creators($metadata) : [],
             publisher: $metadata ? self::firstText($metadata, 'publisher') : null,
@@ -35,19 +35,39 @@ final class OpfReader
             subjects: $metadata ? self::texts($metadata, 'subject') : [],
             license: $metadata ? self::firstText($metadata, 'rights') : null,
             publishDate: $metadata ? self::date($metadata) : new PublishDate(),
-            coverHref: self::cover($packageNode),
         );
     }
 
-    public static function fromXml(string $xml): OpfMeta
+    public static function fromXml(string $xml): Metadata
     {
-        try {
-            $dom = \Dom\XMLDocument::createFromString($xml, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        } catch (\DOMException) {
-            return new OpfMeta();
+        $dom = self::parse($xml);
+        if (null === $dom) {
+            return new Metadata();
         }
 
         return self::metadata($dom->documentElement);
+    }
+
+    /**
+     * The cover entry declared by the document, or null when there is none.
+     */
+    public static function coverHref(string $xml): ?string
+    {
+        $dom = self::parse($xml);
+        if (null === $dom) {
+            return null;
+        }
+
+        return self::cover($dom->documentElement);
+    }
+
+    private static function parse(string $xml): ?\Dom\XMLDocument
+    {
+        try {
+            return \Dom\XMLDocument::createFromString($xml, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
+        } catch (\DOMException) {
+            return null;
+        }
     }
 
     /**

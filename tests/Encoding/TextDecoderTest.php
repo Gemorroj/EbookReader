@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Tests\Text;
+namespace EbookReader\Tests\Encoding;
 
+use EbookReader\Encoding\TextDecoder;
 use EbookReader\Exception\ParserException;
-use EbookReader\Text\TextDecoder;
 use PHPUnit\Framework\TestCase;
 
 final class TextDecoderTest extends TestCase

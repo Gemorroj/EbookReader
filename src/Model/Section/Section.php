@@ -4,17 +4,23 @@ declare(strict_types=1);
 
 namespace EbookReader\Model\Section;
 
-use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Resource\EbookResourceInterface;
 
-readonly class MobiSection implements EbookSectionInterface
+/**
+ * Generic content section: the shared implementation for formats whose content
+ * model is only id, title, content, media type and resources. Formats carrying
+ * extra data (EPUB navigation, FB2 annotation/epigraphs) extend it.
+ */
+readonly class Section implements EbookSectionInterface
 {
     /**
-     * @param list<EbookResource> $resources
+     * @param list<EbookResourceInterface> $resources
      */
     public function __construct(
         private string $id,
         private string $content,
         private ?string $title,
+        private string $mediaType,
         private array $resources = [],
     ) {
     }
@@ -40,11 +46,11 @@ readonly class MobiSection implements EbookSectionInterface
     #[\Override]
     public function getMediaType(): string
     {
-        return 'text/html';
+        return $this->mediaType;
     }
 
     /**
-     * @return list<EbookResource>
+     * @return list<EbookResourceInterface>
      */
     #[\Override]
     public function getResources(): array

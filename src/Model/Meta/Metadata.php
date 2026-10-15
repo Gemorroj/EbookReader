@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace EbookReader\Model\Meta;
 
-final readonly class Fb2Meta implements EbookMetaInterface
+/**
+ * Book metadata: the single {@see EbookMetaInterface} implementation shared by
+ * every format. Unknown values are empty (`''`, `[]` or null).
+ */
+final readonly class Metadata implements EbookMetaInterface
 {
     /**
      * @param list<string> $authors
      * @param list<string> $subjects
      */
     public function __construct(
-        private string $title,
-        private array $authors,
-        private ?string $publisher,
-        private ?string $isbn,
-        private ?string $description,
-        private ?string $language,
-        private array $subjects,
-        private ?string $license,
-        private PublishDate $publishDate
+        private string $title = '',
+        private array $authors = [],
+        private ?string $publisher = null,
+        private ?string $isbn = null,
+        private ?string $description = null,
+        private ?string $language = null,
+        private array $subjects = [],
+        private ?string $license = null,
+        private PublishDate $publishDate = new PublishDate(),
     ) {
     }
 
@@ -87,5 +91,24 @@ final readonly class Fb2Meta implements EbookMetaInterface
     public function getPublishDate(): PublishDate
     {
         return $this->publishDate;
+    }
+
+    /**
+     * A copy with the title replaced; used when a format derives the title from
+     * its content because the metadata does not declare one.
+     */
+    public function withTitle(string $title): self
+    {
+        return new self(
+            $title,
+            $this->authors,
+            $this->publisher,
+            $this->isbn,
+            $this->description,
+            $this->language,
+            $this->subjects,
+            $this->license,
+            $this->publishDate,
+        );
     }
 }

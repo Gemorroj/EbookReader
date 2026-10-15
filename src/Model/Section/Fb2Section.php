@@ -4,55 +4,26 @@ declare(strict_types=1);
 
 namespace EbookReader\Model\Section;
 
-use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Resource\EbookResourceInterface;
 
-final readonly class Fb2Section implements EbookSectionInterface
+/**
+ * FB2 section: HTML content plus the FB2-specific annotation and epigraphs.
+ */
+final readonly class Fb2Section extends Section
 {
     /**
-     * @param list<Fb2Epigraph>   $epigraphs
-     * @param list<EbookResource> $resources
+     * @param list<Fb2Epigraph>            $epigraphs
+     * @param list<EbookResourceInterface> $resources
      */
     public function __construct(
-        private string $id,
-        private string $content,
-        private ?string $title,
+        string $id,
+        string $content,
+        ?string $title,
         private ?string $annotation,
         private array $epigraphs = [],
-        private array $resources = [],
+        array $resources = [],
     ) {
-    }
-
-    #[\Override]
-    public function getId(): string
-    {
-        return $this->id;
-    }
-
-    #[\Override]
-    public function getContent(): string
-    {
-        return $this->content;
-    }
-
-    #[\Override]
-    public function getTitle(): ?string
-    {
-        return $this->title;
-    }
-
-    #[\Override]
-    public function getMediaType(): string
-    {
-        return 'text/html';
-    }
-
-    /**
-     * @return list<EbookResource>
-     */
-    #[\Override]
-    public function getResources(): array
-    {
-        return $this->resources;
+        parent::__construct($id, $content, $title, 'text/html', $resources);
     }
 
     /**

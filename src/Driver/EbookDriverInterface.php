@@ -9,7 +9,7 @@ use EbookReader\Model\Format;
 use EbookReader\Model\Meta\EbookMetaInterface;
 use EbookReader\Model\Resource\EbookResourceInterface;
 use EbookReader\Model\Section\EbookSectionInterface;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 interface EbookDriverInterface
 {
@@ -20,7 +20,7 @@ interface EbookDriverInterface
     /**
      * Flat table of contents (level = nesting depth, starting at 1).
      *
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     public function getTableOfContents(): array;
 

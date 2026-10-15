@@ -7,12 +7,12 @@ namespace EbookReader\Driver;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Cover\Cover;
 use EbookReader\Model\Format;
-use EbookReader\Model\Meta\Fb2Meta;
+use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Meta\PublishDate;
 use EbookReader\Model\Resource\Resource as EbookResource;
 use EbookReader\Model\Section\Fb2Epigraph;
 use EbookReader\Model\Section\Fb2Section;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 /**
  * @see https://wiki.mobileread.com/wiki/FB2
@@ -229,7 +229,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -259,7 +259,7 @@ final class Fb2Driver extends AbstractDriver
                         $title = \mb_trim(\strip_tags($reader->readInnerXml()));
                         if ('' !== $title) {
                             $sectionIndex = \end($sectionIndexes);
-                            $entries[] = new TableOfContents($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex, null, null);
+                            $entries[] = new TableOfContentsEntry($title, \max(1, \count($sectionIndexes)), false === $sectionIndex ? null : $sectionIndex, null, null);
                         }
                     }
                 } elseif ($inBody && \XMLReader::END_ELEMENT === $reader->nodeType) {
@@ -278,7 +278,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     #[\Override]
-    public function getMeta(): Fb2Meta
+    public function getMeta(): Metadata
     {
         $descriptionNode = $this->getFictionBookDescription();
 
@@ -297,7 +297,7 @@ final class Fb2Driver extends AbstractDriver
         $publishYear = $this->makePublishYear($publishNodeInfo);
         $subjects = $this->makeSubjects($titleInfoNode);
 
-        return new Fb2Meta(
+        return new Metadata(
             title: $title,
             authors: $authors,
             publisher: $publisher,

@@ -15,11 +15,11 @@ use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedCompressionException;
 use EbookReader\Model\Cover\Cover;
 use EbookReader\Model\Format;
-use EbookReader\Model\Meta\MobiMeta;
+use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Meta\PublishDate;
 use EbookReader\Model\Resource\Resource as EbookResource;
-use EbookReader\Model\Section\MobiSection;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\Section\Section;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 /**
  * @see https://wiki.mobileread.com/wiki/MOBI
@@ -56,7 +56,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return list<MobiSection>
+     * @return list<Section>
      */
     #[\Override]
     public function getSections(): array
@@ -120,7 +120,7 @@ class MobiDriver extends AbstractDriver
         }
 
         return [
-            new MobiSection('0', $text, null, $resources),
+            new Section('0', $text, null, 'text/html', $resources),
         ];
     }
 
@@ -387,7 +387,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -433,14 +433,14 @@ class MobiDriver extends AbstractDriver
             }
 
             $level = isset($tagMap[4][0]) ? $tagMap[4][0] + 1 : 1;
-            $toc[] = new TableOfContents($title, \max(1, $level), 0, null, $tagMap[1][0] ?? null);
+            $toc[] = new TableOfContentsEntry($title, \max(1, $level), 0, null, $tagMap[1][0] ?? null);
         }
 
         return $toc;
     }
 
     #[\Override]
-    public function getMeta(): MobiMeta
+    public function getMeta(): Metadata
     {
         try {
             $f = new \SplFileObject($this->getFile(), 'r');
@@ -468,7 +468,7 @@ class MobiDriver extends AbstractDriver
         $publishDate = $exthData['publishDate'];
         $encoding = $mobiData['text_encoding'];
 
-        return new MobiMeta(
+        return new Metadata(
             title: $title,
             authors: \array_map(fn (string $value): string => $this->decodeText($value, $encoding), $exthData['authors']),
             publisher: $this->decodeNullable($exthData['publisher'], $encoding),

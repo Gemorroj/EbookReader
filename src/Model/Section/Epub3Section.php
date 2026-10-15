@@ -4,53 +4,26 @@ declare(strict_types=1);
 
 namespace EbookReader\Model\Section;
 
-use EbookReader\Model\Resource\Resource as EbookResource;
+use EbookReader\Model\Resource\EbookResourceInterface;
 
-final readonly class Epub3Section implements EbookSectionInterface
+/**
+ * EPUB content document (XHTML). `navigation` is the tri-state from the spine
+ * properties: true for the nav document, false for the rest, null when the
+ * format does not mark one.
+ */
+final readonly class Epub3Section extends Section
 {
     /**
-     * @param list<EbookResource> $resources
+     * @param list<EbookResourceInterface> $resources
      */
     public function __construct(
-        private string $id,
-        private string $content,
-        private ?string $title,
+        string $id,
+        string $content,
+        ?string $title,
         private ?bool $navigation = null,
-        private array $resources = [],
+        array $resources = [],
     ) {
-    }
-
-    #[\Override]
-    public function getId(): string
-    {
-        return $this->id;
-    }
-
-    #[\Override]
-    public function getContent(): string
-    {
-        return $this->content;
-    }
-
-    #[\Override]
-    public function getTitle(): ?string
-    {
-        return $this->title;
-    }
-
-    #[\Override]
-    public function getMediaType(): string
-    {
-        return 'application/xhtml+xml';
-    }
-
-    /**
-     * @return list<EbookResource>
-     */
-    #[\Override]
-    public function getResources(): array
-    {
-        return $this->resources;
+        parent::__construct($id, $content, $title, 'application/xhtml+xml', $resources);
     }
 
     public function isNavigation(): ?bool

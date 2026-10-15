@@ -12,11 +12,11 @@ use EbookReader\Driver\MarkdownDriver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Driver\TxtDriver;
 use EbookReader\EbookReaderFactory;
+use EbookReader\Encoding\TextDecoder;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Model\Format;
 use EbookReader\Source\FileSource;
-use EbookReader\Text\TextDecoder;
 use PHPUnit\Framework\TestCase;
 
 final class EbookReaderFactoryTest extends TestCase

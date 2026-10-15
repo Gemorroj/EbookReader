@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Text;
+namespace EbookReader\Encoding;
 
 use EbookReader\Exception\ParserException;
 

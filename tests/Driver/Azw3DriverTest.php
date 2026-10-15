@@ -8,7 +8,7 @@ use EbookReader\Driver\Azw3Driver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Model\Format;
 use EbookReader\Model\Resource\Resource as EbookResource;
-use EbookReader\Model\Section\Azw3Section;
+use EbookReader\Model\Section\Section;
 use PHPUnit\Framework\TestCase;
 
 final class Azw3DriverTest extends TestCase
@@ -111,7 +111,7 @@ final class Azw3DriverTest extends TestCase
 
         self::assertCount(6, $data);
         foreach ($data as $section) {
-            self::assertInstanceOf(Azw3Section::class, $section);
+            self::assertInstanceOf(Section::class, $section);
         }
 
         self::assertSame('"Cover"', $data[0]->getTitle());

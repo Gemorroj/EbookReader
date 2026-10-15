@@ -7,7 +7,7 @@ namespace EbookReader\Tests\Driver;
 use EbookReader\Driver\HtmlDriver;
 use EbookReader\Model\Format;
 use EbookReader\Model\Resource\EbookResourceInterface;
-use EbookReader\Model\Section\HtmlSection;
+use EbookReader\Model\Section\Section;
 use PHPUnit\Framework\TestCase;
 
 final class HtmlDriverTest extends TestCase
@@ -70,7 +70,7 @@ final class HtmlDriverTest extends TestCase
 
         self::assertCount(1, $data);
 
-        /** @var HtmlSection $first */
+        /** @var Section $first */
         $first = $data[0];
         self::assertSame('0', $first->getId());
         self::assertSame('Simple Book', $first->getTitle());

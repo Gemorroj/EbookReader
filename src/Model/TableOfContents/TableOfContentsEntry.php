@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace EbookReader\Model\TableOfContents;
 
-final readonly class TableOfContents
+final readonly class TableOfContentsEntry
 {
     public function __construct(
         private string $title,

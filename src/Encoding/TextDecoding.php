@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EbookReader\Text;
+namespace EbookReader\Encoding;
 
 /**
  * Fallback used when bytes are neither declared nor valid UTF-8.

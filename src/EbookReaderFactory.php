@@ -12,6 +12,8 @@ use EbookReader\Driver\HtmlDriver;
 use EbookReader\Driver\MarkdownDriver;
 use EbookReader\Driver\MobiDriver;
 use EbookReader\Driver\TxtDriver;
+use EbookReader\Encoding\TextDecoder;
+use EbookReader\Encoding\TextDecoderInterface;
 use EbookReader\Exception\FileNotReadableException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\MimeDetector\MimeDetector;
@@ -19,8 +21,6 @@ use EbookReader\MimeDetector\MimeDetectorInterface;
 use EbookReader\Source\BookSource;
 use EbookReader\Source\FileSource;
 use EbookReader\Source\StringSource;
-use EbookReader\Text\TextDecoder;
-use EbookReader\Text\TextDecoderInterface;
 
 final class EbookReaderFactory
 {

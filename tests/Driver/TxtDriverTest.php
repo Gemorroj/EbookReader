@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\TxtDriver;
+use EbookReader\Encoding\TextDecoder;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Format;
-use EbookReader\Model\Section\TxtSection;
-use EbookReader\Text\TextDecoder;
+use EbookReader\Model\Section\Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -207,7 +207,7 @@ final class TxtDriverTest extends TestCase
 
         self::assertCount($expectedCount, $data);
 
-        /** @var TxtSection $firstData */
+        /** @var Section $firstData */
         $firstData = $data[0];
 
         self::assertSame($expectedTitle, $firstData->getTitle(), $file);

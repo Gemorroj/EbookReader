@@ -10,8 +10,8 @@ use EbookReader\Driver\Mobi\Kf8;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Format;
 use EbookReader\Model\Resource\Resource as EbookResource;
-use EbookReader\Model\Section\Azw3Section;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\Section\Section;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 /**
  * Kindle Format 8 (AZW3/KF8).
@@ -57,7 +57,7 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * @return list<Azw3Section>
+     * @return list<Section>
      */
     #[\Override]
     public function getSections(): array
@@ -191,7 +191,7 @@ final class Azw3Driver extends MobiDriver
             $data = [];
             foreach ($parts as $part) {
                 [$html, $resources] = $this->expand($part['html'], $flows, $resolveEmbed);
-                $data[] = new Azw3Section($part['name'], $html, self::extractTitle($html), $resources);
+                $data[] = new Section($part['name'], $html, self::extractTitle($html), 'text/html', $resources);
             }
 
             return $data;
@@ -201,7 +201,7 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -262,7 +262,7 @@ final class Azw3Driver extends MobiDriver
 
             $level = isset($tagMap[4][0]) ? $tagMap[4][0] + 1 : 1;
             $position = $tagMap[1][0] ?? null;
-            $toc[] = new TableOfContents($title, \max(1, $level), self::sectionForPosition($position, $ranges), null, $position);
+            $toc[] = new TableOfContentsEntry($title, \max(1, $level), self::sectionForPosition($position, $ranges), null, $position);
         }
 
         return $toc;

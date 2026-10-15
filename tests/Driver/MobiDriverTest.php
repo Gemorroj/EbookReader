@@ -9,7 +9,7 @@ use EbookReader\Exception\EncryptedBookException;
 use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedCompressionException;
 use EbookReader\Model\Format;
-use EbookReader\Model\Section\MobiSection;
+use EbookReader\Model\Section\Section;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -239,7 +239,7 @@ final class MobiDriverTest extends TestCase
 
         self::assertCount($expectedCount, $data);
 
-        /** @var MobiSection $firstData */
+        /** @var Section $firstData */
         $firstData = $data[0];
 
         self::assertSame($expectedTitle, $firstData->getTitle(), $file);

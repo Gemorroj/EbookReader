@@ -8,11 +8,11 @@ use EbookReader\Exception\ParserException;
 use EbookReader\Exception\UnsupportedFormatException;
 use EbookReader\Model\Cover\Cover;
 use EbookReader\Model\Format;
-use EbookReader\Model\Meta\Epub3Meta;
+use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Resource\Resource as EbookResource;
 use EbookReader\Model\Resource\ResourceType;
 use EbookReader\Model\Section\Epub3Section;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 /**
  * @see https://www.w3.org/publishing/epub3/epub-spec.html
@@ -433,7 +433,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -501,7 +501,7 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @param array<string, int> $spineMap
      *
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     private function parseNav(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
@@ -543,8 +543,8 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @param list<TableOfContents> $entries
-     * @param array<string, int>    $spineMap
+     * @param list<TableOfContentsEntry> $entries
+     * @param array<string, int>         $spineMap
      */
     private function walkOl(\Dom\Element $ol, int $level, array &$entries, string $baseDir, array $spineMap): void
     {
@@ -558,7 +558,7 @@ final class Epub3Driver extends AbstractDriver
                     $title = \mb_trim($child->textContent);
                     if ('' !== $title) {
                         [$sectionIndex, $anchor] = $this->resolveTarget(self::attribute($child, 'href'), $baseDir, $spineMap);
-                        $entries[] = new TableOfContents($title, $level, $sectionIndex, $anchor);
+                        $entries[] = new TableOfContentsEntry($title, $level, $sectionIndex, $anchor);
                     }
                     break;
                 }
@@ -575,7 +575,7 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @param array<string, int> $spineMap
      *
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     private function parseNcx(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
@@ -592,8 +592,8 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @param list<TableOfContents> $entries
-     * @param array<string, int>    $spineMap
+     * @param list<TableOfContentsEntry> $entries
+     * @param array<string, int>         $spineMap
      */
     private function walkNavPoints(\Dom\Element $parent, int $level, array &$entries, string $baseDir, array $spineMap): void
     {
@@ -607,7 +607,7 @@ final class Epub3Driver extends AbstractDriver
             if ('' !== $title) {
                 $src = $navPoint->getElementsByTagNameNS('*', 'content')->item(0)?->getAttribute('src');
                 [$sectionIndex, $anchor] = null === $src ? [null, null] : $this->resolveTarget($src, $baseDir, $spineMap);
-                $entries[] = new TableOfContents($title, $level, $sectionIndex, $anchor);
+                $entries[] = new TableOfContentsEntry($title, $level, $sectionIndex, $anchor);
             }
 
             $this->walkNavPoints($navPoint, $level + 1, $entries, $baseDir, $spineMap);
@@ -679,7 +679,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     #[\Override]
-    public function getMeta(): Epub3Meta
+    public function getMeta(): Metadata
     {
         $packageNode = $this->getPackageNode();
 
@@ -691,19 +691,7 @@ final class Epub3Driver extends AbstractDriver
             throw new ParserException();
         }
 
-        $meta = OpfReader::metadata($packageNode);
-
-        return new Epub3Meta(
-            title: $meta->getTitle(),
-            authors: $meta->getAuthors(),
-            publisher: $meta->getPublisher(),
-            isbn: $meta->getIsbn(),
-            description: $meta->getDescription(),
-            language: $meta->getLanguage(),
-            subjects: $meta->getSubjects(),
-            license: $meta->getLicense(),
-            publishDate: $meta->getPublishDate(),
-        );
+        return OpfMetadataReader::metadata($packageNode);
     }
 
     /**

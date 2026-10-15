@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Driver\Zip\Assets as ZipAssets;
+use EbookReader\Driver\Zip\CoverFinder as ZipCoverFinder;
+use EbookReader\Driver\Zip\Metadata as ZipMetadata;
+use EbookReader\Driver\Zip\Reader as ZipReader;
 use EbookReader\Exception\ParserException;
 use EbookReader\Model\Cover\Cover;
 use EbookReader\Model\Format;
-use EbookReader\Model\Meta\MarkdownMeta;
-use EbookReader\Model\Meta\OpfMeta;
+use EbookReader\Model\Meta\Metadata;
 use EbookReader\Model\Resource\Resource as EbookResource;
-use EbookReader\Model\Resource\ResourceType;
-use EbookReader\Model\Section\MarkdownSection;
-use EbookReader\Model\TableOfContents\TableOfContents;
+use EbookReader\Model\Section\Section;
+use EbookReader\Model\TableOfContents\TableOfContentsEntry;
 
 /**
  * Markdown documents: a .md/.markdown file, or markdown entries inside a ZIP
@@ -76,7 +78,7 @@ final class MarkdownDriver extends AbstractDriver
     }
 
     /**
-     * @return list<MarkdownSection>
+     * @return list<Section>
      */
     #[\Override]
     public function getSections(): array
@@ -84,10 +86,11 @@ final class MarkdownDriver extends AbstractDriver
         $markdown = $this->markdown();
 
         return [
-            new MarkdownSection(
+            new Section(
                 $this->documentId(),
                 $markdown,
                 self::firstHeading($markdown),
+                'text/markdown',
                 $this->assets(),
             ),
         ];
@@ -96,92 +99,55 @@ final class MarkdownDriver extends AbstractDriver
     #[\Override]
     public function getCover(): ?Cover
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null === $zip) {
             return null;
         }
 
         try {
-            $content = $zip->getFromName('metadata.opf');
-            $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
-
-            $names = [];
-            $coverHref = $opf->getCoverHref();
-            if (null !== $coverHref) {
-                $names[] = $coverHref;
-            }
-            for ($i = 0; $i < $zip->numFiles; ++$i) {
-                $name = $zip->getNameIndex($i);
-                if (false !== $name && \in_array(\pathinfo($name, \PATHINFO_FILENAME), self::COVER_FILENAMES, true)) {
-                    $names[] = $name;
-                }
-            }
-
-            foreach ($names as $name) {
-                $data = $zip->getFromName($name);
-                if (false === $data) {
-                    continue;
-                }
-                $mime = $this->getMimeDetector()->detect($data);
-                if ($mime) {
-                    return new Cover($data, $mime);
-                }
-            }
+            return new ZipCoverFinder($this->getMimeDetector())->find($zip, self::COVER_FILENAMES);
         } finally {
             $zip->close();
         }
-
-        return null;
     }
 
     /**
      * Every heading of the document, at its own level (anchors are not available
      * because raw Markdown carries no element ids).
      *
-     * @return list<TableOfContents>
+     * @return list<TableOfContentsEntry>
      */
     #[\Override]
     public function getTableOfContents(): array
     {
         $toc = [];
         foreach (self::headings($this->markdown()) as $heading) {
-            $toc[] = new TableOfContents($heading['title'], $heading['level'], 0, null);
+            $toc[] = new TableOfContentsEntry($heading['title'], $heading['level'], 0, null);
         }
 
         return $toc;
     }
 
     #[\Override]
-    public function getMeta(): MarkdownMeta
+    public function getMeta(): Metadata
     {
-        $content = false;
-        $zip = $this->openZip();
-        if (null !== $zip) {
+        $zip = ZipReader::open($this->getFile());
+        if (null === $zip) {
+            $meta = new Metadata();
+        } else {
             try {
-                $content = $zip->getFromName('metadata.opf');
+                $meta = new ZipMetadata($zip)->metadata();
             } finally {
                 $zip->close();
             }
         }
-        $opf = false === $content ? new OpfMeta() : OpfReader::fromXml($content);
-
-        $title = $opf->getTitle();
-        if ('' === $title) {
-            $markdown = $this->markdown();
-            $title = self::firstHeading($markdown) ?? self::firstLine($markdown);
+        if ('' !== $meta->getTitle()) {
+            return $meta;
         }
 
-        return new MarkdownMeta(
-            title: $title,
-            authors: $opf->getAuthors(),
-            publisher: $opf->getPublisher(),
-            isbn: $opf->getIsbn(),
-            description: $opf->getDescription(),
-            language: $opf->getLanguage(),
-            subjects: $opf->getSubjects(),
-            license: $opf->getLicense(),
-            publishDate: $opf->getPublishDate(),
-        );
+        $markdown = $this->markdown();
+
+        return $meta->withTitle(self::firstHeading($markdown) ?? self::firstLine($markdown));
     }
 
     private function markdown(): string
@@ -292,77 +258,27 @@ final class MarkdownDriver extends AbstractDriver
      */
     private function assets(): array
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null === $zip) {
             return [];
         }
 
         try {
-            $resources = [];
-            for ($i = 0; $i < $zip->numFiles; ++$i) {
-                $name = $zip->getNameIndex($i);
-                if (false === $name || \str_ends_with($name, '/')) {
-                    continue;
-                }
-                if (\in_array(\strtolower(\pathinfo($name, \PATHINFO_EXTENSION)), self::MARKDOWN_EXTENSIONS, true)) {
-                    continue;
-                }
-                $data = $zip->getFromIndex($i);
-                if (false === $data) {
-                    continue;
-                }
-                $mime = $this->getMimeDetector()->detect($data) ?? self::extensionMime(\pathinfo($name, \PATHINFO_EXTENSION));
-                if (null === $mime || ResourceType::OTHER === ResourceType::fromMime($mime)) {
-                    continue;
-                }
-                $resources[] = new EbookResource($name, $data, $mime);
-            }
-
-            return $resources;
+            return new ZipAssets($this->getMimeDetector())->collect($zip, excludeExtensions: self::MARKDOWN_EXTENSIONS);
         } finally {
             $zip->close();
         }
     }
 
-    private function openZip(): ?\ZipArchive
-    {
-        $zip = new \ZipArchive();
-        if (true !== $zip->open($this->getFile(), \ZipArchive::RDONLY)) {
-            return null;
-        }
-
-        return $zip;
-    }
-
-    /**
-     * @return list<string> markdown entry names, naturally sorted
-     */
-    private function markdownEntries(\ZipArchive $zip): array
-    {
-        $names = [];
-        for ($i = 0; $i < $zip->numFiles; ++$i) {
-            $name = $zip->getNameIndex($i);
-            if (false === $name) {
-                continue;
-            }
-            if (\in_array(\strtolower(\pathinfo($name, \PATHINFO_EXTENSION)), self::MARKDOWN_EXTENSIONS, true)) {
-                $names[] = $name;
-            }
-        }
-        \usort($names, static fn (string $a, string $b): int => \strnatcasecmp($a, $b));
-
-        return $names;
-    }
-
     private function documentId(): string
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null === $zip) {
             return '0';
         }
 
         try {
-            return $this->markdownEntries($zip)[0] ?? '0';
+            return $zip->entries(self::MARKDOWN_EXTENSIONS)[0] ?? '0';
         } finally {
             $zip->close();
         }
@@ -373,21 +289,17 @@ final class MarkdownDriver extends AbstractDriver
      */
     private function readAll(): string
     {
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null !== $zip) {
             try {
-                $entries = $this->markdownEntries($zip);
+                $entries = $zip->entries(self::MARKDOWN_EXTENSIONS);
                 if ([] === $entries) {
                     throw new ParserException();
                 }
 
                 $markdown = '';
                 foreach ($entries as $entry) {
-                    $data = $zip->getFromName($entry);
-                    if (false === $data) {
-                        throw new ParserException();
-                    }
-                    $markdown .= $data."\n\n";
+                    $markdown .= $zip->read($entry)."\n\n";
                 }
 
                 return $markdown;
@@ -411,61 +323,26 @@ final class MarkdownDriver extends AbstractDriver
     private function readSample(int $size): string
     {
         $size = \max(0, $size);
-        $zip = $this->openZip();
+        $zip = ZipReader::open($this->getFile());
         if (null !== $zip) {
             try {
-                $entries = $this->markdownEntries($zip);
+                $entries = $zip->entries(self::MARKDOWN_EXTENSIONS);
                 if ([] === $entries) {
                     throw new ParserException();
                 }
-                $head = $this->readEntryHead($entries[0], $size);
+                $head = $zip->head($entries[0], $size);
             } finally {
                 $zip->close();
             }
         } else {
             $head = @\file_get_contents($this->getFile(), false, null, 0, $size);
-        }
-
-        if (false === $head) {
-            throw new ParserException();
+            if (false === $head) {
+                throw new ParserException();
+            }
         }
 
         $position = \strrpos($head, "\n");
 
         return false === $position ? $head : \substr($head, 0, $position);
-    }
-
-    /**
-     * @return string|false
-     */
-    private function readEntryHead(string $entry, int $size)
-    {
-        $stream = @\fopen('zip://'.$this->getFile().'#'.$entry, 'r');
-        if (false === $stream) {
-            return false;
-        }
-
-        try {
-            return \fread($stream, \max(1, $size));
-        } finally {
-            \fclose($stream);
-        }
-    }
-
-    /**
-     * MIME types the content detector cannot recognise (text/CSS), guessed from
-     * the entry extension.
-     */
-    private static function extensionMime(string $extension): ?string
-    {
-        return match (\strtolower($extension)) {
-            'css' => 'text/css',
-            'svg' => 'image/svg+xml',
-            'ttf' => 'font/ttf',
-            'otf' => 'font/otf',
-            'woff' => 'font/woff',
-            'woff2' => 'font/woff2',
-            default => null,
-        };
     }
 }

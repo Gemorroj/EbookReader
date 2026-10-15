@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace EbookReader\Driver;
 
+use EbookReader\Encoding\TextDecoder;
+use EbookReader\Encoding\TextDecoderInterface;
 use EbookReader\MimeDetector\MimeDetector;
 use EbookReader\MimeDetector\MimeDetectorInterface;
 use EbookReader\Model\Resource\EbookResourceInterface;
 use EbookReader\Source\BookSource;
 use EbookReader\Source\FileSource;
-use EbookReader\Text\TextDecoder;
-use EbookReader\Text\TextDecoderInterface;
 
 abstract class AbstractDriver implements EbookDriverInterface
 {
