@@ -8,36 +8,48 @@ use EbookReader\Cover\Cover;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
 use EbookReader\Meta\HtmlMeta;
+use EbookReader\Meta\OpfMeta;
+use EbookReader\Resource\Resource as EbookResource;
+use EbookReader\Resource\ResourceType;
 use EbookReader\Section\HtmlSection;
 use EbookReader\TableOfContents\TableOfContents;
 
 /**
- * Plain HTML documents (a single .html/.htm file).
+ * Plain HTML documents: a single .html/.htm/.xhtml file, or an "htmlz" (a ZIP
+ * with one top-level HTML document plus its assets, optionally with a
+ * metadata.opf, as produced by Calibre).
  *
  * There is no specification for how a book is laid out in HTML, so this driver
- * does no heuristic structuring: the whole document is returned as a single
- * section (media type text/html), and the charset is taken from <meta> when
- * present. No cover, table of contents or resources (a ZIP of HTML files is not
- * supported: their order would be a guess).
+ * does no heuristic structuring: the whole document is a single section (media
+ * type text/html, charset from <meta>), the table of contents is derived from
+ * the document headings (h1..h3), and the archive's images, fonts and
+ * stylesheets are exposed as resources. A ZIP of several HTML files is read as
+ * its "index" document (Calibre HTMLZ semantics).
  */
 final class HtmlDriver extends AbstractDriver
 {
+    private const array HTML_EXTENSIONS = ['html', 'htm', 'xhtml'];
+    private const array INDEX_NAMES = ['index.html', 'index.xhtml', 'index.htm'];
+    private const array COVER_FILENAMES = ['cover', 'cover-image', 'cover-img', 'cover_0'];
+
+    #[\Override]
     public function getFormat(): Format
     {
         return Format::HTML;
     }
 
+    #[\Override]
     public function isValid(): bool
     {
-        $head = @\file_get_contents($this->getFile(), false, null, 0, 1024);
-        if (false === $head) {
+        try {
+            $head = $this->readHead(1024);
+        } catch (\Throwable) {
             return false;
         }
 
         // The file itself must be the HTML document: skip a BOM, an optional XML
         // prolog, leading comments and whitespace, then require a doctype or
-        // <html> tag. This rejects containers (e.g. PalmDOC) that only embed HTML
-        // further in.
+        // <html> tag. This rejects containers (e.g. PalmDOC) that only embed HTML.
         $head = \preg_replace('~^\xEF\xBB\xBF~', '', $head) ?? $head;
         $head = \preg_replace('~^(?:<\?xml.*?\?>|<!--.*?-->|\s)+~is', '', $head) ?? $head;
 
@@ -47,17 +59,53 @@ final class HtmlDriver extends AbstractDriver
     /**
      * @return HtmlSection[]
      */
+    #[\Override]
     public function getSections(): array
     {
-        $html = $this->read();
+        $html = $this->readDocument();
 
         return [
-            new HtmlSection('0', $html, self::extractTitle($html)),
+            new HtmlSection($this->documentId(), $html, self::extractTitle($html), $this->assets()),
         ];
     }
 
+    #[\Override]
     public function getCover(): ?Cover
     {
+        $zip = $this->openZip();
+        if (null === $zip) {
+            return null;
+        }
+
+        try {
+            $opf = OpfMeta::fromArchive($zip);
+
+            $names = [];
+            $coverHref = $opf->getCoverHref();
+            if (null !== $coverHref) {
+                $names[] = $coverHref;
+            }
+            for ($i = 0; $i < $zip->numFiles; ++$i) {
+                $name = $zip->getNameIndex($i);
+                if (false !== $name && \in_array(\pathinfo($name, \PATHINFO_FILENAME), self::COVER_FILENAMES, true)) {
+                    $names[] = $name;
+                }
+            }
+
+            foreach ($names as $name) {
+                $data = $zip->getFromName($name);
+                if (false === $data) {
+                    continue;
+                }
+                $mime = $this->getMimeDetector()->detect($data);
+                if ($mime) {
+                    return new Cover($data, $mime);
+                }
+            }
+        } finally {
+            $zip->close();
+        }
+
         return null;
     }
 
@@ -67,11 +115,12 @@ final class HtmlDriver extends AbstractDriver
      *
      * @return TableOfContents[]
      */
+    #[\Override]
     public function getTableOfContents(): array
     {
         // Dom\HTMLDocument (PHP 8.4+) is a spec-compliant HTML5 parser; it also
         // handles the encoding itself, so no <meta> juggling is needed.
-        $document = \Dom\HTMLDocument::createFromString($this->read(), \LIBXML_NOERROR, 'UTF-8');
+        $document = \Dom\HTMLDocument::createFromString($this->readDocument(), \LIBXML_NOERROR, 'UTF-8');
 
         $toc = [];
         foreach ($document->getElementsByTagName('*') as $node) {
@@ -91,19 +140,212 @@ final class HtmlDriver extends AbstractDriver
         return $toc;
     }
 
+    #[\Override]
     public function getMeta(): HtmlMeta
     {
-        return new HtmlMeta(self::extractTitle($this->read()) ?? '');
+        $opf = new OpfMeta();
+        $zip = $this->openZip();
+        if (null !== $zip) {
+            try {
+                $opf = OpfMeta::fromArchive($zip);
+            } finally {
+                $zip->close();
+            }
+        }
+
+        $title = $opf->getTitle();
+        if ('' === $title) {
+            $title = self::extractTitle($this->readDocument()) ?? '';
+        }
+
+        return new HtmlMeta(
+            title: $title,
+            authors: $opf->getAuthors(),
+            publisher: $opf->getPublisher(),
+            isbn: $opf->getIsbn(),
+            description: $opf->getDescription(),
+            language: $opf->getLanguage(),
+            subjects: $opf->getSubjects(),
+            license: $opf->getLicense(),
+            publishDate: $opf->getPublishDate(),
+        );
     }
 
-    private function read(): string
+    private function readDocument(): string
     {
-        $bytes = @\file_get_contents($this->getFile());
-        if (false === $bytes) {
-            throw new ParserException();
+        $zip = $this->openZip();
+        if (null !== $zip) {
+            try {
+                $entry = $this->htmlEntry($zip);
+                if (null === $entry) {
+                    throw new ParserException();
+                }
+                $bytes = $zip->getFromName($entry);
+                if (false === $bytes) {
+                    throw new ParserException();
+                }
+            } finally {
+                $zip->close();
+            }
+        } else {
+            $bytes = @\file_get_contents($this->getFile());
+            if (false === $bytes) {
+                throw new ParserException();
+            }
         }
 
         return $this->getTextDecoder()->toUtf8($bytes, self::declaredCharset($bytes));
+    }
+
+    private function readHead(int $size): string
+    {
+        $zip = $this->openZip();
+        if (null !== $zip) {
+            try {
+                $entry = $this->htmlEntry($zip);
+                if (null === $entry) {
+                    throw new ParserException();
+                }
+                $head = $this->readEntryHead($entry, $size);
+            } finally {
+                $zip->close();
+            }
+        } else {
+            $head = @\file_get_contents($this->getFile(), false, null, 0, \max(0, $size));
+        }
+
+        if (false === $head) {
+            throw new ParserException();
+        }
+
+        return $head;
+    }
+
+    /**
+     * @return string|false
+     */
+    private function readEntryHead(string $entry, int $size)
+    {
+        $stream = @\fopen('zip://'.$this->getFile().'#'.$entry, 'r');
+        if (false === $stream) {
+            return false;
+        }
+
+        try {
+            return \fread($stream, \max(1, $size));
+        } finally {
+            \fclose($stream);
+        }
+    }
+
+    private function documentId(): string
+    {
+        $zip = $this->openZip();
+        if (null === $zip) {
+            return '0';
+        }
+
+        try {
+            return $this->htmlEntry($zip) ?? '0';
+        } finally {
+            $zip->close();
+        }
+    }
+
+    /**
+     * The archive's assets (images, fonts, stylesheets) as resources.
+     *
+     * @return EbookResource[]
+     */
+    private function assets(): array
+    {
+        $zip = $this->openZip();
+        if (null === $zip) {
+            return [];
+        }
+
+        try {
+            $document = $this->htmlEntry($zip);
+
+            $resources = [];
+            for ($i = 0; $i < $zip->numFiles; ++$i) {
+                $name = $zip->getNameIndex($i);
+                if (false === $name || $name === $document) {
+                    continue;
+                }
+                $data = $zip->getFromIndex($i);
+                if (false === $data) {
+                    continue;
+                }
+                $mime = $this->getMimeDetector()->detect($data) ?? self::extensionMime(\pathinfo($name, \PATHINFO_EXTENSION));
+                if (null === $mime || ResourceType::OTHER === ResourceType::fromMime($mime)) {
+                    continue;
+                }
+                $resources[] = new EbookResource($name, $data, $mime);
+            }
+
+            return $resources;
+        } finally {
+            $zip->close();
+        }
+    }
+
+    private function openZip(): ?\ZipArchive
+    {
+        $zip = new \ZipArchive();
+        if (true !== $zip->open($this->getFile(), \ZipArchive::RDONLY)) {
+            return null;
+        }
+
+        return $zip;
+    }
+
+    /**
+     * The entry holding the document: index.* when present (Calibre HTMLZ), else
+     * the naturally-first HTML entry.
+     */
+    private function htmlEntry(\ZipArchive $zip): ?string
+    {
+        $candidates = [];
+        for ($i = 0; $i < $zip->numFiles; ++$i) {
+            $name = $zip->getNameIndex($i);
+            if (false === $name) {
+                continue;
+            }
+
+            if (!\in_array(\strtolower(\pathinfo($name, \PATHINFO_EXTENSION)), self::HTML_EXTENSIONS, true)) {
+                continue;
+            }
+
+            if (\in_array(\strtolower(\basename($name)), self::INDEX_NAMES, true)) {
+                return $name;
+            }
+            $candidates[] = $name;
+        }
+
+        if ([] === $candidates) {
+            return null;
+        }
+        \usort($candidates, static fn (string $a, string $b): int => \strnatcasecmp($a, $b));
+
+        return $candidates[0];
+    }
+
+    /**
+     * MIME types the content detector cannot recognise (text/CSS), guessed from
+     * the entry extension.
+     */
+    private static function extensionMime(string $extension): ?string
+    {
+        return match (\strtolower($extension)) {
+            'css' => 'text/css',
+            'svg' => 'image/svg+xml',
+            'ttf' => 'font/ttf',
+            'otf' => 'font/otf',
+            'woff' => 'font/woff',
+            'woff2' => 'font/woff2',
+            default => null,
+        };
     }
 
     private static function declaredCharset(string $bytes): ?string

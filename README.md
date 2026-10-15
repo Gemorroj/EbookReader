@@ -12,8 +12,8 @@
 | MOBI | uncompressed, PalmDOC, HUFF/CDIC | yes | images | yes (positions) | HTML |
 | AZW3 | standalone and joint KF8 | yes | images, fonts | yes (positions) | HTML (flows inlined) |
 | FB2 | 2.x, plain or ZIP | yes | images | yes | HTML (styles inlined) |
-| HTML | a single .html file | no | - | headings | HTML |
-| TXT | plain or ZIP | ZIP only | - | no | plain text |
+| HTML | single file or `htmlz` ZIP | ZIP only | images, styles, fonts (ZIP) | headings | HTML |
+| TXT | plain or ZIP (`txtz`) | ZIP only | - | chapters | plain text |
 
 Every format is read through the same interface. `EbookReaderFactory::create()` detects the format automatically; the returned reader exposes metadata, cover, table of contents, content sections and their assets.
 
@@ -143,7 +143,7 @@ Detection picks the most plausible candidate (Cyrillic, Latin and Chinese legacy
 
 ### Limitations:
 - DRM-protected books are not supported.
-- HTML: a single file only, and the table of contents is derived from the document headings (h1..h3) — HTML book layout is not standardised.
+- HTML: a single file, or an "htmlz" ZIP (the index document is read, its images/fonts/stylesheets are exposed as resources, and title/author/cover come from a `metadata.opf` when present); the table of contents is derived from the document headings (h1..h3) — HTML book layout is not standardised.
 - TXT: chapters are detected with a conservative keyword heuristic (English/Russian), and become sections and table-of-contents entries; a ZIP ("txtz") is read as all of its text files joined, with title/author/cover taken from `metadata.opf` when present.
 - AZW3 supports standalone and joint MOBI6 + KF8 files.
 - Internal `kindle:pos:` (KF8) file-position links are not converted to anchors; EPUB `@import` chains in stylesheets are not resolved.

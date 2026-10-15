@@ -91,6 +91,24 @@ final class EbookReaderFactoryTest extends TestCase
         self::assertSame(Format::HTML, $html->getFormat());
     }
 
+    public function testCreateHtmlz(): void
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'htmlz');
+        self::assertNotFalse($file);
+        $zip = new \ZipArchive();
+        self::assertTrue($zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE));
+        $zip->addFromString('index.html', '<html><body><h1>Hi</h1></body></html>');
+        $zip->close();
+
+        try {
+            $reader = EbookReaderFactory::create($file);
+            self::assertInstanceOf(HtmlDriver::class, $reader);
+            self::assertSame(Format::HTML, $reader->getFormat());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testTextDecoderIsConfigurable(): void
     {
         $file = \tempnam(\sys_get_temp_dir(), 'txt');

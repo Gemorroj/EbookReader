@@ -6,6 +6,7 @@ namespace EbookReader\Tests\Driver;
 
 use EbookReader\Driver\HtmlDriver;
 use EbookReader\Format;
+use EbookReader\Resource\EbookResourceInterface;
 use EbookReader\Section\HtmlSection;
 use PHPUnit\Framework\TestCase;
 
@@ -160,5 +161,145 @@ final class HtmlDriverTest extends TestCase
         } finally {
             \unlink($file);
         }
+    }
+
+    public function testHtmlzWithMetadataCoverAndAssets(): void
+    {
+        $file = self::makeZip([
+            'index.html' => '<html><head><title>Doc</title></head><body><h1 id="start">Start</h1></body></html>',
+            'style.css' => 'body{color:red}',
+            'images/pic.png' => (string) \file_get_contents(__DIR__.'/../fixtures/images/png.png'),
+            'cover.jpg' => (string) \file_get_contents(__DIR__.'/../fixtures/images/jpeg.jpg'),
+            'metadata.opf' => '<?xml version="1.0" encoding="utf-8"?>'
+                .'<package xmlns="http://www.idpf.org/2007/opf" version="1.0">'
+                .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+                .'<dc:title>Zip Book</dc:title><dc:creator>John Roe</dc:creator></metadata>'
+                .'<manifest><item id="cover" href="cover.jpg" media-type="image/jpeg"/></manifest>'
+                .'<spine/><meta name="cover" content="cover"/></package>',
+        ]);
+
+        try {
+            $driver = new HtmlDriver($file);
+            self::assertTrue($driver->isValid());
+
+            $sections = $driver->getSections();
+            self::assertCount(1, $sections);
+            self::assertSame('index.html', $sections[0]->getId());
+            self::assertSame('Doc', $sections[0]->getTitle());
+            self::assertStringContainsString('<h1 id="start">Start</h1>', $sections[0]->getContent());
+
+            $meta = $driver->getMeta();
+            self::assertSame('Zip Book', $meta->getTitle());
+            self::assertSame('John Roe', $meta->getAuthor());
+
+            $cover = $driver->getCover();
+            self::assertNotNull($cover);
+            self::assertSame('image/jpeg', $cover->getMime());
+
+            $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $driver->getResources());
+            self::assertContains('style.css', $paths);
+            self::assertContains('images/pic.png', $paths);
+
+            $toc = $driver->getTableOfContents();
+            self::assertCount(1, $toc);
+            self::assertSame('Start', $toc[0]->getTitle());
+            self::assertSame('start', $toc[0]->getAnchor());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testZipPrefersIndexDocument(): void
+    {
+        $file = self::makeZip([
+            'b.html' => '<html><body>B</body></html>',
+            'index.html' => '<html><body><h1>Index</h1></body></html>',
+        ]);
+
+        try {
+            $sections = new HtmlDriver($file)->getSections();
+            self::assertSame('index.html', $sections[0]->getId());
+            self::assertStringContainsString('<h1>Index</h1>', $sections[0]->getContent());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testHtmlzWithoutMetadataUsesDocumentTitleAndAssets(): void
+    {
+        $file = self::makeZip([
+            'index.html' => '<html><head><title>Plain</title></head><body>x</body></html>',
+            'style.css' => 'body{}',
+        ]);
+
+        try {
+            $driver = new HtmlDriver($file);
+            self::assertSame('Plain', $driver->getMeta()->getTitle());
+            self::assertNull($driver->getCover());
+
+            $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $driver->getResources());
+            self::assertContains('style.css', $paths);
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testZipCoverFallbackByFilename(): void
+    {
+        $file = self::makeZip([
+            'index.html' => '<html><body>x</body></html>',
+            'cover.png' => (string) \file_get_contents(__DIR__.'/../fixtures/images/png.png'),
+        ]);
+
+        try {
+            $cover = new HtmlDriver($file)->getCover();
+            self::assertNotNull($cover);
+            self::assertSame('image/png', $cover->getMime());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testZipWithoutIndexUsesFirstHtml(): void
+    {
+        $file = self::makeZip([
+            'b.html' => '<html><body>B</body></html>',
+            'a.html' => '<html><body>A</body></html>',
+        ]);
+
+        try {
+            self::assertSame('a.html', new HtmlDriver($file)->getSections()[0]->getId());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    public function testZipWithoutHtmlIsInvalid(): void
+    {
+        $file = self::makeZip(['notes.txt' => 'text']);
+
+        try {
+            self::assertFalse(new HtmlDriver($file)->isValid());
+        } finally {
+            \unlink($file);
+        }
+    }
+
+    /**
+     * @param array<string, string> $entries
+     */
+    private static function makeZip(array $entries): string
+    {
+        $file = \tempnam(\sys_get_temp_dir(), 'htmlz');
+        self::assertNotFalse($file);
+
+        $zip = new \ZipArchive();
+        self::assertTrue($zip->open($file, \ZipArchive::CREATE | \ZipArchive::OVERWRITE));
+        foreach ($entries as $name => $content) {
+            $zip->addFromString($name, $content);
+        }
+        $zip->close();
+
+        return $file;
     }
 }

@@ -7,7 +7,7 @@ namespace EbookReader\Driver;
 use EbookReader\Cover\Cover;
 use EbookReader\Exception\ParserException;
 use EbookReader\Format;
-use EbookReader\Meta\PublishDate;
+use EbookReader\Meta\OpfMeta;
 use EbookReader\Meta\TxtMeta;
 use EbookReader\Section\TxtSection;
 use EbookReader\TableOfContents\TableOfContents;
@@ -83,11 +83,12 @@ final class TxtDriver extends AbstractDriver
         }
 
         try {
-            $meta = self::readOpfMeta($zip);
+            $opf = OpfMeta::fromArchive($zip);
 
             $names = [];
-            if (isset($meta['cover'])) {
-                $names[] = $meta['cover'];
+            $coverHref = $opf->getCoverHref();
+            if (null !== $coverHref) {
+                $names[] = $coverHref;
             }
             for ($i = 0; $i < $zip->numFiles; ++$i) {
                 $name = $zip->getNameIndex($i);
@@ -133,26 +134,31 @@ final class TxtDriver extends AbstractDriver
     #[\Override]
     public function getMeta(): TxtMeta
     {
-        $meta = [];
+        $opf = new OpfMeta();
         $zip = $this->openZip();
         if (null !== $zip) {
             try {
-                $meta = self::readOpfMeta($zip);
+                $opf = OpfMeta::fromArchive($zip);
             } finally {
                 $zip->close();
             }
         }
 
+        $title = $opf->getTitle();
+        if ('' === $title) {
+            $title = $this->firstLine();
+        }
+
         return new TxtMeta(
-            title: $meta['title'] ?? $this->firstLine(),
-            authors: $meta['authors'] ?? [],
-            publisher: $meta['publisher'] ?? null,
-            isbn: $meta['isbn'] ?? null,
-            description: $meta['description'] ?? null,
-            language: $meta['language'] ?? null,
-            subjects: $meta['subjects'] ?? [],
-            license: $meta['license'] ?? null,
-            publishDate: $meta['publishDate'] ?? new PublishDate(),
+            title: $title,
+            authors: $opf->getAuthors(),
+            publisher: $opf->getPublisher(),
+            isbn: $opf->getIsbn(),
+            description: $opf->getDescription(),
+            language: $opf->getLanguage(),
+            subjects: $opf->getSubjects(),
+            license: $opf->getLicense(),
+            publishDate: $opf->getPublishDate(),
         );
     }
 
@@ -327,143 +333,5 @@ final class TxtDriver extends AbstractDriver
         }
 
         return '';
-    }
-
-    /**
-     * @return array{title?: string, authors?: string[], publisher?: string, isbn?: string, description?: string, language?: string, subjects?: string[], license?: string, cover?: string, publishDate?: PublishDate}
-     */
-    private static function readOpfMeta(\ZipArchive $zip): array
-    {
-        $content = $zip->getFromName('metadata.opf');
-        if (false === $content) {
-            return [];
-        }
-
-        try {
-            $dom = \Dom\XMLDocument::createFromString($content, \LIBXML_NONET | \LIBXML_NOERROR | \LIBXML_NOBLANKS);
-        } catch (\DOMException) {
-            return [];
-        }
-
-        $meta = [];
-        foreach (['title', 'publisher', 'language', 'description'] as $name) {
-            $value = self::firstText($dom, $name);
-            if (null !== $value) {
-                $meta[$name] = $value;
-            }
-        }
-
-        $authors = self::texts($dom, 'creator');
-        if ([] !== $authors) {
-            $meta['authors'] = $authors;
-        }
-        $subjects = self::texts($dom, 'subject');
-        if ([] !== $subjects) {
-            $meta['subjects'] = $subjects;
-        }
-
-        $license = self::firstText($dom, 'rights');
-        if (null !== $license) {
-            $meta['license'] = $license;
-        }
-
-        foreach ($dom->getElementsByTagNameNS('*', 'identifier') as $node) {
-            $value = \mb_trim($node->textContent);
-            if (\str_starts_with($value, 'urn:isbn:')) {
-                $meta['isbn'] = \substr($value, 9);
-                break;
-            }
-        }
-
-        $cover = self::coverFromOpf($dom, $zip);
-        if (null !== $cover) {
-            $meta['cover'] = $cover;
-        }
-
-        $meta['publishDate'] = self::parseDate($dom);
-
-        return $meta;
-    }
-
-    /**
-     * Parses dc:date with per-format precision (year, year+month or a full date).
-     */
-    private static function parseDate(\Dom\XMLDocument $dom): PublishDate
-    {
-        $value = self::firstText($dom, 'date');
-        if (null === $value) {
-            return new PublishDate();
-        }
-
-        if (1 === \preg_match('/^(\d{4})$/', $value, $matches)) {
-            return new PublishDate((int) $matches[1]);
-        }
-        if (1 === \preg_match('/^(\d{4})-(\d{1,2})$/', $value, $matches)) {
-            return new PublishDate((int) $matches[1], (int) $matches[2]);
-        }
-
-        try {
-            $date = new \DateTimeImmutable($value, new \DateTimeZone('UTC'));
-        } catch (\Throwable) {
-            return new PublishDate();
-        }
-
-        return new PublishDate((int) $date->format('Y'), (int) $date->format('m'), (int) $date->format('d'));
-    }
-
-    private static function firstText(\Dom\XMLDocument $dom, string $localName): ?string
-    {
-        $text = $dom->getElementsByTagNameNS('*', $localName)->item(0)?->textContent;
-        $text = null === $text ? null : \mb_trim($text);
-
-        return null === $text || '' === $text ? null : $text;
-    }
-
-    /**
-     * @return string[]
-     */
-    private static function texts(\Dom\XMLDocument $dom, string $localName): array
-    {
-        $values = [];
-        foreach ($dom->getElementsByTagNameNS('*', $localName) as $node) {
-            $text = \mb_trim($node->textContent);
-            if ('' !== $text) {
-                $values[] = $text;
-            }
-        }
-
-        return $values;
-    }
-
-    private static function coverFromOpf(\Dom\XMLDocument $dom, \ZipArchive $zip): ?string
-    {
-        $coverId = null;
-        foreach ($dom->getElementsByTagNameNS('*', 'meta') as $node) {
-            if ('cover' === self::attr($node, 'name')) {
-                $coverId = self::attr($node, 'content');
-                break;
-            }
-        }
-        if (null !== $coverId && '' !== $coverId) {
-            foreach ($dom->getElementsByTagNameNS('*', 'item') as $node) {
-                $href = self::attr($node, 'href');
-                if ($coverId === self::attr($node, 'id') && '' !== $href && false !== $zip->getFromName($href)) {
-                    return $href;
-                }
-            }
-        }
-
-        $node = $dom->getElementsByTagNameNS('*', 'cover-relpath-from-base')->item(0);
-        $href = null === $node ? '' : \mb_trim($node->textContent);
-        if ('' !== $href && false !== $zip->getFromName($href)) {
-            return $href;
-        }
-
-        return null;
-    }
-
-    private static function attr(\Dom\Element $element, string $name): string
-    {
-        return $element->getAttribute($name) ?? '';
     }
 }

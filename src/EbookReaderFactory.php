@@ -65,11 +65,12 @@ final class EbookReaderFactory
             ];
         }
 
-        // ZIP container: EPUB, FB2-ZIP or TXT-ZIP.
+        // ZIP container: EPUB, FB2-ZIP, HTMLZ or TXT-ZIP.
         if (\str_starts_with($head, "PK\x03\x04")) {
             return [
                 new Epub3Driver($file, $mimeDetector, $textDecoder),
                 new Fb2Driver($file, $mimeDetector, $textDecoder),
+                new HtmlDriver($file, $mimeDetector, $textDecoder),
                 new TxtDriver($file, $mimeDetector, $textDecoder),
             ];
         }
