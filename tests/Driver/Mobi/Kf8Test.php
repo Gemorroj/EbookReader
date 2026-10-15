@@ -77,4 +77,66 @@ final class Kf8Test extends TestCase
 
         self::assertSame('AB', $parts[0]['html']);
     }
+
+    public function testBase32Decode(): void
+    {
+        self::assertSame(0, Kf8::base32Decode('0'));
+        self::assertSame(9, Kf8::base32Decode('9'));
+        self::assertSame(12, Kf8::base32Decode('C'));
+        self::assertSame(31, Kf8::base32Decode('V'));
+        self::assertSame(32, Kf8::base32Decode('10'));
+        self::assertSame(2060, Kf8::base32Decode('000000020C'));
+        self::assertSame(2060, Kf8::base32Decode('000000020c'));
+    }
+
+    public function testIdBefore(): void
+    {
+        $html = '<i id="one"></i><b name="two"></b>';
+
+        self::assertNull(Kf8::idBefore($html, 0));
+        self::assertSame('one', Kf8::idBefore($html, \strpos($html, 'id="one"') + \strlen('id="one"')));
+        self::assertSame('two', Kf8::idBefore($html, \strlen($html)));
+    }
+
+    public function testResolvePositionFindsAnchorInPart(): void
+    {
+        $html = '<b id="a"></b>rest';
+        $parts = [['name' => 'S0', 'html' => $html, 'start' => 0, 'end' => \strlen($html)]];
+
+        // fid 0 -> row 0, offset base32 '9' = 9 -> position 9 (right after id="a").
+        self::assertSame([0, 'S0', 'a'], Kf8::resolvePosition([[0, 0]], $parts, '0', '9'));
+    }
+
+    public function testResolvePositionWithoutAnchor(): void
+    {
+        $html = 'plain text';
+        $parts = [['name' => 'S0', 'html' => $html, 'start' => 0, 'end' => \strlen($html)]];
+
+        self::assertSame([0, 'S0', null], Kf8::resolvePosition([[0, 0]], $parts, '0', '3'));
+    }
+
+    public function testResolvePositionFallsBackToFileTop(): void
+    {
+        $parts = [
+            ['name' => 'P0', 'html' => 'x', 'start' => 0, 'end' => 10],
+            ['name' => 'P1', 'html' => 'y', 'start' => 10, 'end' => 20],
+        ];
+
+        // Position 1000 is outside every part -> fall back to file number 1.
+        self::assertSame([1, 'P1', null], Kf8::resolvePosition([[1000, 1]], $parts, '0', '0'));
+    }
+
+    public function testResolvePositionWithUnknownFragment(): void
+    {
+        $parts = [['name' => 'P0', 'html' => 'x', 'start' => 0, 'end' => 10]];
+
+        self::assertNull(Kf8::resolvePosition([[0, 0]], $parts, '1', '0'));
+    }
+
+    public function testResolvePositionWithoutFallbackFile(): void
+    {
+        $parts = [['name' => 'P0', 'html' => 'x', 'start' => 0, 'end' => 10]];
+
+        self::assertNull(Kf8::resolvePosition([[1000, null]], $parts, '0', '0'));
+    }
 }

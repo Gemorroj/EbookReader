@@ -148,7 +148,39 @@ final class Azw3DriverTest extends TestCase
             $text = $section->getContent();
             self::assertStringNotContainsString('kindle:embed', $text);
             self::assertStringNotContainsString('kindle:flow', $text);
+            self::assertStringNotContainsString('kindle:pos', $text);
         }
+    }
+
+    public function testKindlePosLinksAreResolved(): void
+    {
+        $sections = new Azw3Driver(self::SVG_COVER)->getSections();
+
+        $sectionIds = [];
+        $anchorOwner = [];
+        foreach ($sections as $section) {
+            $sectionIds[$section->getId()] = true;
+            \preg_match_all('~\b(?:id|name)\s*=\s*"([^"]+)"~i', $section->getContent(), $matches);
+            foreach ($matches[1] as $id) {
+                $anchorOwner[$id] = $section->getId();
+            }
+        }
+
+        $resolved = 0;
+        foreach ($sections as $section) {
+            $content = $section->getContent();
+            self::assertStringNotContainsString('kindle:pos:', $content);
+
+            \preg_match_all('~href="(SKEL[0-9A-V]+)#([^"]+)"~i', $content, $matches, \PREG_SET_ORDER);
+            foreach ($matches as $match) {
+                self::assertArrayHasKey($match[1], $sectionIds, $match[0]);
+                self::assertSame($match[1], $anchorOwner[$match[2]] ?? null, $match[0]);
+                ++$resolved;
+            }
+        }
+
+        // Both entries of the generated TOC link into other sections.
+        self::assertSame(2, $resolved);
     }
 
     public function testImagesFontsMeta(): void

@@ -115,6 +115,67 @@ final class Kf8
         return $parts;
     }
 
+    /**
+     * Decodes a KF8 base32 number (alphabet 0-9, A-V), used by both resource
+     * (`kindle:embed`) and position (`kindle:pos`) references.
+     */
+    public static function base32Decode(string $value): int
+    {
+        $result = 0;
+        foreach (\str_split(\strtoupper($value)) as $char) {
+            $code = \ord($char);
+            $result = $result * 32 + ($code <= 57 ? $code - 48 : $code - 55);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Resolves a `kindle:pos:fid:F:off:O` target to
+     * [section index, section name, nearest anchor id before the position].
+     * Falls back to the top of the fragment's file when the exact position is
+     * not found.
+     *
+     * @param list<array{0: int, 1: int|null}>                              $fragments fragment insert position, file number
+     * @param list<array{name: string, html: string, start: int, end: int}> $parts
+     *
+     * @return array{0: int, 1: string, 2: ?string}|null
+     */
+    public static function resolvePosition(array $fragments, array $parts, string $fid, string $offset): ?array
+    {
+        $row = self::base32Decode($fid);
+        if ($row < 0 || $row >= \count($fragments)) {
+            return null;
+        }
+
+        [$insertPosition, $fileNumber] = $fragments[$row];
+        $position = $insertPosition + self::base32Decode($offset);
+        foreach ($parts as $index => $part) {
+            if ($position >= $part['start'] && $position < $part['end']) {
+                return [$index, $part['name'], self::idBefore($part['html'], $position - $part['start'])];
+            }
+        }
+
+        if (null !== $fileNumber && isset($parts[$fileNumber])) {
+            return [$fileNumber, $parts[$fileNumber]['name'], null];
+        }
+
+        return null;
+    }
+
+    /**
+     * The id/name of the last anchored element before $offset in $html.
+     */
+    public static function idBefore(string $html, int $offset): ?string
+    {
+        $chunk = \substr($html, 0, \max(0, $offset));
+        if (!\preg_match_all('~\b(?:id|name)\s*=\s*"([^"]+)"~i', $chunk, $matches)) {
+            return null;
+        }
+
+        return \end($matches[1]);
+    }
+
     private static function uint32(string $data, int $offset): int
     {
         $value = \unpack('N', \substr($data, $offset, 4));

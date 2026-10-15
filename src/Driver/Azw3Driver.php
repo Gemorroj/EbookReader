@@ -161,9 +161,19 @@ final class Azw3Driver extends MobiDriver
 
             $parts = Kf8::buildParts($flows[0], $skeletons['entries'], $fragments['entries']);
 
+            // The DIV index gives, per fragment, its insert position and file
+            // number; a `kindle:pos:fid:F:off:O` link addresses fragment F
+            // (base32) plus a base32 offset, i.e. a position in the assembled
+            // markup.
+            $fragmentInfo = [];
+            foreach ($fragments['entries'] as [$identifier, $tags]) {
+                $fragmentInfo[] = [(int) $identifier, $tags[3][0] ?? null];
+            }
+            $resolvePos = static fn (string $fid, string $offset): ?array => Kf8::resolvePosition($fragmentInfo, $parts, $fid, $offset);
+
             $resourceRecords = $layout['resource_records'];
             $resolveEmbed = function (string $embed) use ($f, $records, $fileSize, $resourceRecords): ?EbookResource {
-                $number = self::base32Decode($embed);
+                $number = Kf8::base32Decode($embed);
                 if ($number < 1 || !isset($resourceRecords[$number - 1])) {
                     return null;
                 }
@@ -189,8 +199,8 @@ final class Azw3Driver extends MobiDriver
             };
 
             $data = [];
-            foreach ($parts as $part) {
-                [$html, $resources] = $this->expand($part['html'], $flows, $resolveEmbed);
+            foreach ($parts as $sectionIndex => $part) {
+                [$html, $resources] = $this->expand($part['html'], $flows, $resolveEmbed, $resolvePos, $sectionIndex);
                 $data[] = new Section($part['name'], $html, self::extractTitle($html), 'text/html', $resources);
             }
 
@@ -394,19 +404,21 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * Inlines referenced flows (CSS/SVG) and resolves image references.
+     * Inlines referenced flows (CSS/SVG), resolves `kindle:pos` links and image
+     * references.
      *
-     * @param list<string>                       $flows
-     * @param callable(string): (?EbookResource) $resolveEmbed
+     * @param list<string>                                                              $flows
+     * @param callable(string): (?EbookResource)                                        $resolveEmbed
+     * @param callable(string, string): (array{0: int, 1: string, 2: string|null}|null) $resolvePos
      *
      * @return array{0: string, 1: list<EbookResource>}
      */
-    private function expand(string $html, array $flows, callable $resolveEmbed): array
+    private function expand(string $html, array $flows, callable $resolveEmbed, callable $resolvePos, int $sectionIndex): array
     {
         $html = \preg_replace_callback(
             '~<[^>]*kindle:flow:([0-9A-V]+)\?mime=([^"\'\s>]+)[^>]*>~i',
             static function (array $matches) use ($flows): string {
-                $index = self::base32Decode($matches[1]);
+                $index = Kf8::base32Decode($matches[1]);
                 if (0 === $index || !isset($flows[$index])) {
                     return $matches[0];
                 }
@@ -416,6 +428,23 @@ final class Azw3Driver extends MobiDriver
                 return \str_contains(\strtolower($matches[2]), 'svg') || \str_contains($content, '<svg')
                     ? $content
                     : '<style type="text/css">'."\n".$content."\n".'</style>';
+            },
+            $html
+        ) ?? $html;
+
+        $html = \preg_replace_callback(
+            '~kindle:pos:fid:([0-9A-V]+):off:([0-9A-V]+)~i',
+            static function (array $matches) use ($resolvePos, $sectionIndex): string {
+                $resolved = $resolvePos($matches[1], $matches[2]);
+                if (null === $resolved) {
+                    return $matches[0];
+                }
+                [$index, $name, $anchor] = $resolved;
+                if ($index === $sectionIndex) {
+                    return null === $anchor ? '#' : '#'.$anchor;
+                }
+
+                return $name.(null === $anchor ? '' : '#'.$anchor);
             },
             $html
         ) ?? $html;
@@ -455,19 +484,5 @@ final class Azw3Driver extends MobiDriver
         $title = \mb_trim(\html_entity_decode(\strip_tags($matches[1]), \ENT_QUOTES | \ENT_HTML5, 'UTF-8'));
 
         return '' === $title ? null : $title;
-    }
-
-    /**
-     * KF8 resource references use a base32 number (alphabet 0-9, A-V).
-     */
-    private static function base32Decode(string $value): int
-    {
-        $result = 0;
-        foreach (\str_split(\strtoupper($value)) as $char) {
-            $code = \ord($char);
-            $result = $result * 32 + ($code <= 57 ? $code - 48 : $code - 55);
-        }
-
-        return $result;
     }
 }
