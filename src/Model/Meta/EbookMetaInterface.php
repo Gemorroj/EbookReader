@@ -21,6 +21,13 @@ interface EbookMetaInterface
     public function getAuthor(): ?string;
 
     /**
+     * Other contributors: editors, translators, illustrators, ...
+     *
+     * @return list<string>
+     */
+    public function getContributors(): array;
+
+    /**
      * Subjects / genres as a list.
      *
      * @return list<string>

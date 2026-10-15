@@ -32,6 +32,7 @@ final class OpfMetadataReader
         return new Metadata(
             title: $metadata ? self::title($metadata) : '',
             authors: $metadata ? self::creators($metadata) : [],
+            contributors: $metadata ? self::texts($metadata, 'contributor') : [],
             publisher: $metadata ? self::firstText($metadata, 'publisher') : null,
             isbn: $metadata ? self::isbn($metadata) : null,
             description: $metadata ? self::firstText($metadata, 'description') : null,
@@ -155,7 +156,7 @@ final class OpfMetadataReader
             }
         }
         foreach ($identifiers as $node) {
-            if ('ISBN' === Element::attribute($node, 'opf:scheme')) {
+            if ('isbn' === \strtolower(Element::attribute($node, 'opf:scheme'))) {
                 return \mb_trim($node->textContent);
             }
         }

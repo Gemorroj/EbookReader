@@ -546,6 +546,7 @@ class MobiDriver extends AbstractDriver
         return new Metadata(
             title: $title,
             authors: \array_map(fn (string $value): string => $this->decodeText($value, $encoding), $exthData['authors']),
+            contributors: \array_map(fn (string $value): string => $this->decodeText($value, $encoding), $exthData['contributors']),
             publisher: $this->decodeNullable($exthData['publisher'], $encoding),
             isbn: $this->decodeNullable($exthData['isbn'], $encoding),
             description: $this->decodeNullable($exthData['description'], $encoding),
@@ -559,12 +560,13 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
+     * @return array{authors: list<string>, contributors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
      */
     protected static function emptyExth(): array
     {
         return [
             'authors' => [],
+            'contributors' => [],
             'subjects' => [],
             'publisher' => null,
             'description' => null,
@@ -602,7 +604,7 @@ class MobiDriver extends AbstractDriver
     /**
      * @param array{exth_flags: int} $mobiData
      *
-     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
+     * @return array{authors: list<string>, contributors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
      */
     protected function exthData(\SplFileObject $f, array $mobiData): array
     {
@@ -614,7 +616,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
+     * @return array{authors: list<string>, contributors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, thumboffset: int|null, kf8_header: int|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -635,6 +637,12 @@ class MobiDriver extends AbstractDriver
             switch ($type) {
                 case 100:
                     $meta['authors'][] = $data;
+                    break;
+                case 108:
+                    $meta['contributors'][] = $data;
+                    break;
+                case 109:
+                    $meta['license'] = $data;
                     break;
                 case 101:
                     $meta['publisher'] = $data;

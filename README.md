@@ -67,6 +67,7 @@ $meta = $book->getMeta();                 // EbookReader\Model\Meta\EbookMetaInt
 $meta->getTitle();
 $meta->getAuthor();                       // authors joined by ", "
 $meta->getAuthors();                      // string[]
+$meta->getContributors();                 // string[] (editors, translators, ...)
 $meta->getSubjects();                     // string[]
 $meta->getPublisher();
 $meta->getLanguage();

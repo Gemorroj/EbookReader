@@ -462,6 +462,37 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
+     * Rewrites url()/@import references inside a document's <style> elements
+     * and returns the referenced asset paths.
+     *
+     * @param array<string, true> $knownPaths
+     *
+     * @return list<string>
+     */
+    private function rewriteInlineStyles(\Dom\XMLDocument $dom, string $baseDir, array $knownPaths): array
+    {
+        $references = [];
+        /** @var \Dom\Element $styleNode */
+        foreach ($dom->getElementsByTagNameNS('*', 'style') as $styleNode) {
+            $type = \strtolower(Element::attribute($styleNode, 'type'));
+            if ('' !== $type && 'text/css' !== $type) {
+                continue;
+            }
+
+            $css = $styleNode->textContent;
+            [$rewritten, $styleReferences] = $this->rewriteCss($css, $baseDir, $knownPaths);
+            if ($rewritten !== $css) {
+                $styleNode->textContent = $rewritten;
+            }
+            foreach ($styleReferences as $path => $_) {
+                $references[$path] = true;
+            }
+        }
+
+        return \array_keys($references);
+    }
+
+    /**
      * Resolves a non-fragment, non-external reference to [canonical path, fragment].
      *
      * @return array{0: string, 1: string}|null
@@ -544,7 +575,11 @@ final class Epub3Driver extends AbstractDriver
                     $isNavigation = true;
                 }
 
-                $referenced = $this->rewriteReferences($domFile, \dirname($documentPath), $knownPaths);
+                $baseDir = \dirname($documentPath);
+                $referenced = $this->rewriteReferences($domFile, $baseDir, $knownPaths);
+                foreach ($this->rewriteInlineStyles($domFile, $baseDir, $knownPaths) as $path) {
+                    $referenced[$path] = true;
+                }
                 foreach (\array_keys($referenced) as $path) {
                     foreach ($styleReferences[$path] ?? [] as $styleReference) {
                         $referenced[$styleReference] = true;

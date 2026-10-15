@@ -446,6 +446,37 @@ final class Epub3DriverTest extends TestCase
         }
     }
 
+    public function testInlineStyleImportsAreResolved(): void
+    {
+        $file = self::makeEpub([
+            'META-INF/container.xml' => self::containerXml('content.opf'),
+            'content.opf' => self::packageXml(
+                '3.0',
+                '<item id="ch" href="ch.xhtml" media-type="application/xhtml+xml"/>'
+                .'<item id="inner" href="inner.css" media-type="text/css"/>'
+                .'<item id="font" href="fonts/x.ttf" media-type="font/ttf"/>',
+                '<itemref idref="ch"/>'
+            ),
+            'ch.xhtml' => '<html xmlns="http://www.w3.org/1999/xhtml"><head>'
+                .'<style type="text/css">@import "inner.css"; @font-face{src:url(fonts/x.ttf)}</style>'
+                .'</head><body>x</body></html>',
+            'inner.css' => 'body{color:red}',
+            'fonts/x.ttf' => 'FONT',
+        ]);
+
+        try {
+            $section = new Epub3Driver($file)->getSections()[0];
+            $paths = \array_map(static fn (EbookResourceInterface $resource): string => $resource->getPath(), $section->getResources());
+
+            self::assertContains('inner.css', $paths);
+            self::assertContains('fonts/x.ttf', $paths);
+            self::assertStringContainsString('inner.css', $section->getContent());
+            self::assertStringContainsString('fonts/x.ttf', $section->getContent());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     public function testIframeAndPosterReferencesAreResolved(): void
     {
         $file = self::makeEpub([

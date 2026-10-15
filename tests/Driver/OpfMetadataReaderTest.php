@@ -76,6 +76,20 @@ final class OpfMetadataReaderTest extends TestCase
         self::assertSame(['Author'], $meta->getAuthors());
     }
 
+    public function testContributorsAndCaseInsensitiveIsbnScheme(): void
+    {
+        $meta = OpfMetadataReader::fromXml(
+            '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" xmlns:opf="http://www.idpf.org/2007/opf">'
+            .'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>T</dc:title>'
+            .'<dc:contributor>Editor One</dc:contributor><dc:contributor>Illustrator</dc:contributor>'
+            .'<dc:identifier opf:scheme="isbn">9781234567890</dc:identifier>'
+            .'</metadata><spine/></package>'
+        );
+
+        self::assertSame(['Editor One', 'Illustrator'], $meta->getContributors());
+        self::assertSame('9781234567890', $meta->getIsbn());
+    }
+
     public function testIsbnFromOpfScheme(): void
     {
         $meta = OpfMetadataReader::fromXml(

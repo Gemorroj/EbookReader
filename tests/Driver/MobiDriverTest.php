@@ -118,6 +118,19 @@ final class MobiDriverTest extends TestCase
         self::assertStringNotContainsString('mbp:', $content);
     }
 
+    public function testExthContributorsAndLicense(): void
+    {
+        $text = '<html><body>x</body></html>';
+
+        $meta = $this->withMobi(
+            self::buildMobi('Title', 1, 65001, \strlen($text), 1, [$text], exthRecords: [108 => 'Editor', 109 => 'Rights text']),
+            static fn (MobiDriver $driver) => $driver->getMeta()
+        );
+
+        self::assertSame(['Editor'], $meta->getContributors());
+        self::assertSame('Rights text', $meta->getLicense());
+    }
+
     public function testSanitizesScriptsAndRemoteReferences(): void
     {
         $text = '<html><body><script>alert(1)</script>'

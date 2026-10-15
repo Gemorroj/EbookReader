@@ -401,7 +401,10 @@ final class Fb2Driver extends AbstractDriver
         /** @var \DOMElement|null $publishNodeInfo */
         $publishNodeInfo = $descriptionNode->getElementsByTagName('publish-info')->item(0);
 
-        $title = $this->makeTitle($titleInfoNode);
+        /** @var \DOMElement|null $srcTitleInfoNode */
+        $srcTitleInfoNode = $descriptionNode->getElementsByTagName('src-title-info')->item(0);
+
+        $title = $this->makeTitle($titleInfoNode, $publishNodeInfo, $srcTitleInfoNode);
         $authors = $this->makeAuthors($titleInfoNode);
         $publisher = $publishNodeInfo ? $this->makePublisher($publishNodeInfo) : null;
         $isbn = $publishNodeInfo ? $this->makeIsbn($publishNodeInfo) : null;
@@ -409,11 +412,12 @@ final class Fb2Driver extends AbstractDriver
         $language = $this->makeLanguage($titleInfoNode);
         $publishYear = $this->makePublishYear($publishNodeInfo);
         $subjects = $this->makeSubjects($titleInfoNode);
-        [$series, $seriesIndex] = $this->makeSeries($titleInfoNode);
+        [$series, $seriesIndex] = $this->makeSeries($titleInfoNode, $publishNodeInfo);
 
         return new Metadata(
             title: $title,
             authors: $authors,
+            contributors: $this->makeContributors($titleInfoNode),
             publisher: $publisher,
             isbn: $isbn,
             description: $description,
@@ -427,24 +431,53 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
+     * Translators, mapped to contributors.
+     *
+     * @return list<string>
+     */
+    protected function makeContributors(\DOMElement $titleInfoNode): array
+    {
+        $contributors = [];
+        /** @var \DOMElement $node */
+        foreach ($titleInfoNode->getElementsByTagName('translator') as $node) {
+            $name = $this->authorName($node);
+            if (null !== $name) {
+                $contributors[] = $name;
+            }
+        }
+
+        return $contributors;
+    }
+
+    /**
+     * The series from <title-info>, falling back to <publish-info>.
+     *
      * @return array{0: ?string, 1: ?float}
      */
-    protected function makeSeries(\DOMElement $titleInfoNode): array
+    protected function makeSeries(\DOMElement $titleInfoNode, ?\DOMElement $publishNodeInfo): array
     {
-        /** @var \DOMElement|null $sequenceNode */
-        $sequenceNode = $titleInfoNode->getElementsByTagName('sequence')->item(0);
-        if (null === $sequenceNode) {
-            return [null, null];
+        foreach ([$titleInfoNode, $publishNodeInfo] as $node) {
+            if (null === $node) {
+                continue;
+            }
+
+            /** @var \DOMElement|null $sequenceNode */
+            $sequenceNode = $node->getElementsByTagName('sequence')->item(0);
+            if (null === $sequenceNode) {
+                continue;
+            }
+
+            $name = \mb_trim($sequenceNode->getAttribute('name'));
+            if ('' === $name) {
+                continue;
+            }
+
+            $number = \mb_trim($sequenceNode->getAttribute('number'));
+
+            return [$name, '' !== $number && \is_numeric($number) ? (float) $number : null];
         }
 
-        $name = \mb_trim($sequenceNode->getAttribute('name'));
-        if ('' === $name) {
-            return [null, null];
-        }
-
-        $number = \mb_trim($sequenceNode->getAttribute('number'));
-
-        return [$name, '' !== $number && \is_numeric($number) ? (float) $number : null];
+        return [null, null];
     }
 
     /**
@@ -607,26 +640,56 @@ final class Fb2Driver extends AbstractDriver
         $authors = [];
         /** @var \DOMElement $authorNode */
         foreach ($authorNodeList as $authorNode) {
-            $firstName = $authorNode->getElementsByTagName('first-name')->item(0)?->nodeValue;
-            $middleName = $authorNode->getElementsByTagName('middle-name')->item(0)?->nodeValue;
-            $lastName = $authorNode->getElementsByTagName('last-name')->item(0)?->nodeValue;
-            $nickname = $authorNode->getElementsByTagName('nickname')->item(0)?->nodeValue;
-
-            if ($firstName && $middleName && $lastName) {
-                $authors[] = $firstName.' '.$middleName.' '.$lastName;
-            } elseif ($firstName && $lastName) {
-                $authors[] = $firstName.' '.$lastName;
-            } elseif ($nickname) {
-                $authors[] = $nickname;
+            $name = $this->authorName($authorNode);
+            if (null !== $name) {
+                $authors[] = $name;
             }
         }
 
         return $authors;
     }
 
-    protected function makeTitle(\DOMElement $titleInfoNode): string
+    /**
+     * The display name of an FB2 authorType node (author, translator, ...).
+     */
+    private function authorName(\DOMElement $node): ?string
     {
-        return $titleInfoNode->getElementsByTagName('book-title')->item(0)->nodeValue;
+        $firstName = $node->getElementsByTagName('first-name')->item(0)?->nodeValue;
+        $middleName = $node->getElementsByTagName('middle-name')->item(0)?->nodeValue;
+        $lastName = $node->getElementsByTagName('last-name')->item(0)?->nodeValue;
+        $nickname = $node->getElementsByTagName('nickname')->item(0)?->nodeValue;
+
+        if ($firstName && $middleName && $lastName) {
+            return $firstName.' '.$middleName.' '.$lastName;
+        }
+        if ($firstName && $lastName) {
+            return $firstName.' '.$lastName;
+        }
+        if ($nickname) {
+            return $nickname;
+        }
+
+        return null;
+    }
+
+    /**
+     * The book-title from <title-info>, falling back to <publish-info> and
+     * <src-title-info>.
+     */
+    protected function makeTitle(\DOMElement $titleInfoNode, ?\DOMElement $publishNodeInfo, ?\DOMElement $srcTitleInfoNode): string
+    {
+        foreach ([$titleInfoNode, $publishNodeInfo, $srcTitleInfoNode] as $node) {
+            if (null === $node) {
+                continue;
+            }
+
+            $value = $node->getElementsByTagName('book-title')->item(0)?->nodeValue;
+            if (null !== $value && '' !== \mb_trim($value)) {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     protected function makeInternalFile(): string

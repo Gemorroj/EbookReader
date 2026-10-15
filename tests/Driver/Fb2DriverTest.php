@@ -177,6 +177,37 @@ final class Fb2DriverTest extends TestCase
         self::assertNull($meta->getSeriesIndex());
     }
 
+    public function testMetaFallbacksAndTranslator(): void
+    {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            .'<FictionBook xmlns="http://www.gribuser.ru/xml/fictionbook/2.0" xmlns:l="http://www.w3.org/1999/xlink">'
+            .'<description>'
+            .'<title-info>'
+            .'<author><first-name>A</first-name><last-name>B</last-name></author>'
+            .'<translator><first-name>T</first-name><last-name>U</last-name></translator>'
+            .'<lang>en</lang>'
+            .'</title-info>'
+            .'<publish-info><book-title>Published Title</book-title>'
+            .'<sequence name="Pub Series" number="3"/></publish-info>'
+            .'</description>'
+            .'<body><section><p>x</p></section></body></FictionBook>';
+
+        $file = \tempnam(\sys_get_temp_dir(), 'fb2');
+        self::assertNotFalse($file);
+        \file_put_contents($file, $xml);
+
+        try {
+            $meta = new Fb2Driver($file)->getMeta();
+
+            self::assertSame('Published Title', $meta->getTitle());
+            self::assertSame(['T U'], $meta->getContributors());
+            self::assertSame('Pub Series', $meta->getSeries());
+            self::assertSame(3.0, $meta->getSeriesIndex());
+        } finally {
+            \unlink($file);
+        }
+    }
+
     #[DataProvider('seriesProvider')]
     public function testMetaSeriesIndex(string $sequence, ?string $expectedSeries, ?float $expectedIndex): void
     {

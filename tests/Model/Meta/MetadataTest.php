@@ -16,6 +16,7 @@ final class MetadataTest extends TestCase
 
         self::assertSame('', $meta->getTitle());
         self::assertSame([], $meta->getAuthors());
+        self::assertSame([], $meta->getContributors());
         self::assertNull($meta->getAuthor());
         self::assertNull($meta->getSeries());
         self::assertNull($meta->getSeriesIndex());
@@ -27,6 +28,7 @@ final class MetadataTest extends TestCase
         $meta = new Metadata(
             title: 'Old',
             authors: ['A'],
+            contributors: ['E'],
             publisher: 'P',
             isbn: 'I',
             description: 'D',
@@ -42,6 +44,7 @@ final class MetadataTest extends TestCase
 
         self::assertSame('New', $renamed->getTitle());
         self::assertSame(['A'], $renamed->getAuthors());
+        self::assertSame(['E'], $renamed->getContributors());
         self::assertSame('P', $renamed->getPublisher());
         self::assertSame('I', $renamed->getIsbn());
         self::assertSame('D', $renamed->getDescription());

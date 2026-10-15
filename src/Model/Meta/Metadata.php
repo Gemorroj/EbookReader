@@ -12,11 +12,13 @@ final readonly class Metadata implements EbookMetaInterface
 {
     /**
      * @param list<string> $authors
+     * @param list<string> $contributors
      * @param list<string> $subjects
      */
     public function __construct(
         private string $title = '',
         private array $authors = [],
+        private array $contributors = [],
         private ?string $publisher = null,
         private ?string $isbn = null,
         private ?string $description = null,
@@ -48,6 +50,15 @@ final readonly class Metadata implements EbookMetaInterface
     public function getAuthor(): ?string
     {
         return $this->authors ? \implode(', ', $this->authors) : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    #[\Override]
+    public function getContributors(): array
+    {
+        return $this->contributors;
     }
 
     /**
@@ -116,6 +127,7 @@ final readonly class Metadata implements EbookMetaInterface
         return new self(
             $title,
             $this->authors,
+            $this->contributors,
             $this->publisher,
             $this->isbn,
             $this->description,
