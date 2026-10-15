@@ -42,7 +42,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return Fb2Section[]
+     * @return list<Fb2Section>
      */
     #[\Override]
     public function getSections(): array
@@ -94,7 +94,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return EbookResource[]
+     * @return list<EbookResource>
      */
     private function collectResources(\DOMElement $sectionNode): array
     {
@@ -229,7 +229,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -311,7 +311,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     protected function makeSubjects(\DOMElement $titleInfoNode): array
     {
@@ -436,7 +436,7 @@ final class Fb2Driver extends AbstractDriver
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     protected function makeAuthors(\DOMElement $titleInfoNode): array
     {

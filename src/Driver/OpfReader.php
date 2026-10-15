@@ -26,15 +26,15 @@ final class OpfReader
         $metadata = $packageNode->getElementsByTagNameNS('*', 'metadata')->item(0);
 
         return new OpfMeta(
-            title: null === $metadata ? '' : self::title($metadata),
-            authors: null === $metadata ? [] : self::creators($metadata),
-            publisher: null === $metadata ? null : self::firstText($metadata, 'publisher'),
-            isbn: null === $metadata ? null : self::isbn($metadata),
-            description: null === $metadata ? null : self::firstText($metadata, 'description'),
-            language: null === $metadata ? null : self::firstText($metadata, 'language'),
-            subjects: null === $metadata ? [] : self::texts($metadata, 'subject'),
-            license: null === $metadata ? null : self::firstText($metadata, 'rights'),
-            publishDate: null === $metadata ? new PublishDate() : self::date($metadata),
+            title: $metadata ? self::title($metadata) : '',
+            authors: $metadata ? self::creators($metadata) : [],
+            publisher: $metadata ? self::firstText($metadata, 'publisher') : null,
+            isbn: $metadata ? self::isbn($metadata) : null,
+            description: $metadata ? self::firstText($metadata, 'description') : null,
+            language: $metadata ? self::firstText($metadata, 'language') : null,
+            subjects: $metadata ? self::texts($metadata, 'subject') : [],
+            license: $metadata ? self::firstText($metadata, 'rights') : null,
+            publishDate: $metadata ? self::date($metadata) : new PublishDate(),
             coverHref: self::cover($packageNode),
         );
     }
@@ -69,7 +69,7 @@ final class OpfReader
     /**
      * Creators with opf:role="aut"; when none is marked, all creators.
      *
-     * @return string[]
+     * @return list<string>
      */
     private static function creators(\Dom\Element $metadata): array
     {
@@ -150,10 +150,10 @@ final class OpfReader
                 break;
             }
         }
-        if (null !== $coverId && '' !== $coverId) {
+        if (null !== $coverId) {
             foreach ($packageNode->getElementsByTagNameNS('*', 'item') as $node) {
                 $href = self::attr($node, 'href');
-                if ($coverId === self::attr($node, 'id') && '' !== $href) {
+                if (null !== $href && $coverId === self::attr($node, 'id')) {
                     return $href;
                 }
             }
@@ -174,7 +174,7 @@ final class OpfReader
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     private static function texts(\Dom\Element $node, string $localName): array
     {
@@ -189,8 +189,8 @@ final class OpfReader
         return $values;
     }
 
-    private static function attr(\Dom\Element $element, string $name): string
+    private static function attr(\Dom\Element $element, string $name): ?string
     {
-        return $element->getAttribute($name) ?? '';
+        return $element->getAttribute($name);
     }
 }

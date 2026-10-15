@@ -7,12 +7,12 @@ namespace EbookReader\Decompressor;
 final class PalmDocLz77 implements DecompressorInterface
 {
     /**
-     * @var int[]
+     * @var list<int>
      */
     private array $data;
     private int $offset = 0;
     /**
-     * @var int[]
+     * @var list<int>
      */
     private array $buffer;
 

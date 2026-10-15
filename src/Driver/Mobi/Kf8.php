@@ -55,7 +55,7 @@ final class Kf8
     /**
      * @param list<array{0: int, 1: int}> $table
      *
-     * @return string[]
+     * @return list<string>
      */
     public static function splitFlows(string $text, array $table): array
     {
@@ -74,8 +74,8 @@ final class Kf8
     /**
      * Merges the skeleton and fragment indexes back into standalone documents.
      *
-     * @param list<array{0: string, 1: array<int, int[]>}> $skeletons
-     * @param list<array{0: string, 1: array<int, int[]>}> $fragments
+     * @param list<array{0: string, 1: array<int, list<int>>}> $skeletons
+     * @param list<array{0: string, 1: array<int, list<int>>}> $fragments
      *
      * @return list<array{name: string, html: string, start: int, end: int}>
      */

@@ -288,7 +288,7 @@ final class MobiDriverTest extends TestCase
     /**
      * Builds a minimal but spec-conformant MOBI (Palm Database) in memory.
      *
-     * @param string[] $records records after record 0 (text/HUFF/CDIC/...)
+     * @param list<string> $records records after record 0 (text/HUFF/CDIC/...)
      */
     private static function buildMobi(
         string $title,

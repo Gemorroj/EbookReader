@@ -35,7 +35,7 @@ abstract class AbstractDriver implements EbookDriverInterface
     }
 
     /**
-     * @return EbookResourceInterface[]
+     * @return list<EbookResourceInterface>
      */
     #[\Override]
     public function getResources(): array

@@ -30,6 +30,8 @@ final readonly class TextDecoder implements TextDecoderInterface
      * the whole repertoire, while Big5/Shift_JIS/EUC cannot be told apart from it
      * (and from each other) by byte structure alone. Declare those explicitly if
      * needed.
+     *
+     * @var list<string>
      */
     public const array DETECT_CANDIDATES = [
         'Windows-1251',
@@ -62,18 +64,24 @@ final readonly class TextDecoder implements TextDecoderInterface
 
     /**
      * Scripts considered when scoring a decode, as Unicode property names.
+     *
+     * @var list<string>
      */
     private const array SCRIPTS = ['Latin', 'Cyrillic', 'Greek', 'Hebrew', 'Arabic', 'Han', 'Hiragana', 'Katakana', 'Hangul', 'Thai'];
 
     /**
      * Multi-byte encodings: a decode that stays valid on high-byte-rich input is
      * a strong signal, since a single-byte guess would win on letter-likeness.
+     *
+     * @var list<string>
      */
     private const array MULTIBYTE_ENCODINGS = ['GB18030'];
 
     /**
      * Letter frequency profiles (lowercased) used to tell apart encodings that
      * decode to the same script, e.g. the Cyrillic single-byte family.
+     *
+     * @var array<string, array<string, float>>
      */
     private const array SCRIPT_FREQUENCIES = [
         'Cyrillic' => [
@@ -94,7 +102,7 @@ final readonly class TextDecoder implements TextDecoderInterface
     ];
 
     /**
-     * @param string[]|null $detectCandidates candidate encodings for DETECT, in preference order
+     * @param list<string>|null $detectCandidates candidate encodings for DETECT, in preference order
      */
     public function __construct(
         private TextDecoding $strategy = TextDecoding::DETECT,
@@ -115,13 +123,13 @@ final readonly class TextDecoder implements TextDecoderInterface
     /**
      * Guess the charset by ranking the candidates, then decode with the winner.
      *
-     * @param string[]|null $candidates encodings to try, in preference order
+     * @param list<string>|null $candidates encodings to try, in preference order
      *
      * @throws ParserException when a candidate is not a known encoding
      */
     public static function detect(?array $candidates = null): self
     {
-        $candidates = null === $candidates || [] === $candidates ? null : \array_values($candidates);
+        $candidates = [] === $candidates ? null : $candidates;
         foreach ($candidates ?? [] as $candidate) {
             self::assertKnownEncoding($candidate);
         }

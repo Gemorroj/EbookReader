@@ -104,7 +104,7 @@ final class MimeDetector implements MimeDetectorInterface
     private function isSvg(string $data): bool
     {
         $data = \trim($data);
-        if ('<svg' === \strtolower(\substr($data, 0, 4))) {
+        if (0 === \stripos($data, '<svg')) {
             return true;
         }
 

@@ -22,11 +22,15 @@ final class Epub3Driver extends AbstractDriver
 {
     /**
      * Attributes whose values may reference an asset or another document.
+     *
+     * @var list<string>
      */
     private const array REFERENCE_ATTRIBUTES = ['href', 'src', 'data'];
 
     /**
      * Elements whose references point at assets (images, fonts, stylesheets, media).
+     *
+     * @var list<string>
      */
     private const array ASSET_TAGS = ['img', 'image', 'link', 'source', 'video', 'audio', 'track', 'object', 'embed'];
 
@@ -142,7 +146,7 @@ final class Epub3Driver extends AbstractDriver
      *
      * @param array<string, array{mediaType: string, path: string, properties: string}> $manifest
      *
-     * @return array{0: array<string, EbookResource>, 1: array<string, string[]>}
+     * @return array{0: array<string, EbookResource>, 1: array<string, list<string>>}
      */
     private function collectAssets(\ZipArchive $zip, array $manifest): array
     {
@@ -276,7 +280,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return Epub3Section[]
+     * @return list<Epub3Section>
      */
     #[\Override]
     public function getSections(): array
@@ -385,7 +389,7 @@ final class Epub3Driver extends AbstractDriver
             }
         }
 
-        /** @var \Dom\Element[] $potentialCoverNodes */
+        /** @var list<\Dom\Element> $potentialCoverNodes */
         $potentialCoverNodes = [];
         /** @var \Dom\Element|null $manifestNode */
         $manifestNode = $packageNode->getElementsByTagNameNS('*', 'manifest')->item(0);
@@ -429,7 +433,7 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -497,7 +501,7 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @param array<string, int> $spineMap
      *
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     private function parseNav(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
@@ -539,8 +543,8 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @param TableOfContents[]  $entries
-     * @param array<string, int> $spineMap
+     * @param list<TableOfContents> $entries
+     * @param array<string, int>    $spineMap
      */
     private function walkOl(\Dom\Element $ol, int $level, array &$entries, string $baseDir, array $spineMap): void
     {
@@ -571,7 +575,7 @@ final class Epub3Driver extends AbstractDriver
     /**
      * @param array<string, int> $spineMap
      *
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     private function parseNcx(\Dom\XMLDocument $dom, string $baseDir, array $spineMap): array
     {
@@ -588,8 +592,8 @@ final class Epub3Driver extends AbstractDriver
     }
 
     /**
-     * @param TableOfContents[]  $entries
-     * @param array<string, int> $spineMap
+     * @param list<TableOfContents> $entries
+     * @param array<string, int>    $spineMap
      */
     private function walkNavPoints(\Dom\Element $parent, int $level, array &$entries, string $baseDir, array $spineMap): void
     {
@@ -681,7 +685,7 @@ final class Epub3Driver extends AbstractDriver
 
         $version = (int) self::attribute($packageNode, 'version');
         if (!\in_array($version, [2, 3], true)) {
-            throw new UnsupportedFormatException();
+            throw new UnsupportedFormatException(\sprintf('Unsupported EPUB version: %d', $version));
         }
         if (!$packageNode->getElementsByTagNameNS('*', 'metadata')->item(0) instanceof \Dom\Element) {
             throw new ParserException();

@@ -57,7 +57,7 @@ final class HtmlDriver extends AbstractDriver
     }
 
     /**
-     * @return HtmlSection[]
+     * @return list<HtmlSection>
      */
     #[\Override]
     public function getSections(): array
@@ -114,7 +114,7 @@ final class HtmlDriver extends AbstractDriver
      * Derived from the document headings (h1..h3): level = tag level, anchor =
      * element id. There is no attempt to locate a "real" table of contents.
      *
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -257,7 +257,7 @@ final class HtmlDriver extends AbstractDriver
     /**
      * The archive's assets (images, fonts, stylesheets) as resources.
      *
-     * @return EbookResource[]
+     * @return list<EbookResource>
      */
     private function assets(): array
     {

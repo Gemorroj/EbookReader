@@ -57,7 +57,7 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * @return Azw3Section[]
+     * @return list<Azw3Section>
      */
     #[\Override]
     public function getSections(): array
@@ -154,7 +154,7 @@ final class Azw3Driver extends MobiDriver
 
             $loadRecord = fn (int $index): string => $this->readRecord($f, $records, $index, $fileSize);
             $skeletons = Index::parse($skelIndex, $loadRecord, $mobiData['text_encoding']);
-            /** @var array{entries: list<array{0: string, 1: array<int, int[]>}>, cncx: array<int, string>} $fragments */
+            /** @var array{entries: list<array{0: string, 1: array<int, list<int>>}>, cncx: array<int, string>} $fragments */
             $fragments = self::NULL_INDEX === $divIndex
                 ? ['entries' => [], 'cncx' => []]
                 : Index::parse($divIndex, $loadRecord, $mobiData['text_encoding']);
@@ -201,7 +201,7 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -275,7 +275,7 @@ final class Azw3Driver extends MobiDriver
      * `kindle:embed:N` addresses a resource map built from the MOBI6 image range
      * followed by the KF8 image range (records 1-based, see calibre).
      *
-     * @param array{records: array{data_offset: int, attributes: int, unique_id: string}[]} $palmDbData
+     * @param array{records: list<array{data_offset: int, attributes: int, unique_id: string}>} $palmDbData
      *
      * @return array{base: int, index_base: int, resource_records: list<int>}|null
      */
@@ -334,9 +334,9 @@ final class Azw3Driver extends MobiDriver
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[] $records
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}> $records
      *
-     * @return int[]
+     * @return list<int>
      */
     private function skeletonStarts(\SplFileObject $f, array $records, int $record0, int $indexBase, int $fileSize, int $encoding): array
     {
@@ -396,10 +396,10 @@ final class Azw3Driver extends MobiDriver
     /**
      * Inlines referenced flows (CSS/SVG) and resolves image references.
      *
-     * @param string[]                           $flows
+     * @param list<string>                       $flows
      * @param callable(string): (?EbookResource) $resolveEmbed
      *
-     * @return array{0: string, 1: EbookResource[]}
+     * @return array{0: string, 1: list<EbookResource>}
      */
     private function expand(string $html, array $flows, callable $resolveEmbed): array
     {

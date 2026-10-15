@@ -9,7 +9,7 @@ use EbookReader\Model\Resource\Resource as EbookResource;
 readonly class MobiSection implements EbookSectionInterface
 {
     /**
-     * @param EbookResource[] $resources
+     * @param list<EbookResource> $resources
      */
     public function __construct(
         private string $id,
@@ -44,7 +44,7 @@ readonly class MobiSection implements EbookSectionInterface
     }
 
     /**
-     * @return EbookResource[]
+     * @return list<EbookResource>
      */
     #[\Override]
     public function getResources(): array

@@ -7,8 +7,8 @@ namespace EbookReader\Model\Meta;
 final readonly class TxtMeta implements EbookMetaInterface
 {
     /**
-     * @param string[] $authors
-     * @param string[] $subjects
+     * @param list<string> $authors
+     * @param list<string> $subjects
      */
     public function __construct(
         private string $title,
@@ -30,7 +30,7 @@ final readonly class TxtMeta implements EbookMetaInterface
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     #[\Override]
     public function getAuthors(): array
@@ -45,7 +45,7 @@ final readonly class TxtMeta implements EbookMetaInterface
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     #[\Override]
     public function getSubjects(): array

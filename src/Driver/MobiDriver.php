@@ -56,7 +56,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return MobiSection[]
+     * @return list<MobiSection>
      */
     #[\Override]
     public function getSections(): array
@@ -125,10 +125,10 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                          $records
      * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      *
-     * @return EbookResource[]
+     * @return list<EbookResource>
      */
     private function collectResources(\SplFileObject $f, array $records, array $mobiData, string $text, int $fileSize): array
     {
@@ -188,7 +188,7 @@ class MobiDriver extends AbstractDriver
     /**
      * PalmDOC is self-contained; HUFF/CDIC needs the HUFF + CDIC records read from the PDB.
      *
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                          $records
      * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      */
     protected function createDecompressor(\SplFileObject $f, array $records, array $mobiData, int $compression): DecompressorInterface
@@ -202,7 +202,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[]                                                                                                                                                                              $records
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}>                                                                                                                                                                          $records
      * @param array{full_name_offset: int, full_name_length: int, type: int, extra_record_data_flags: int, text_encoding: int, huffman_record_offset: int, huffman_record_count: int, first_non_book_index: int, first_image_index: int, ncx_index: int} $mobiData
      */
     private function makeHuffCdic(\SplFileObject $f, array $records, array $mobiData): HuffCdic
@@ -233,7 +233,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param array{data_offset: int, attributes: int, unique_id: string}[] $records
+     * @param list<array{data_offset: int, attributes: int, unique_id: string}> $records
      */
     protected function readRecord(\SplFileObject $f, array $records, int $index, int $fileSize): string
     {
@@ -253,7 +253,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param int[] $data
+     * @param list<int> $data
      */
     protected function getRecordExtraSize(array $data, int $flags): int
     {
@@ -280,7 +280,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @param int[] $data
+     * @param list<int> $data
      *
      * @return array{0: int, 1: int, 2: int}
      */
@@ -387,7 +387,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -484,7 +484,7 @@ class MobiDriver extends AbstractDriver
     }
 
     /**
-     * @return array{authors: string[], subjects: string[], publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, kf8_header: int|null}
+     * @return array{authors: list<string>, subjects: list<string>, publisher: string|null, description: string|null, isbn: string|null, language: string|null, license: string|null, publishDate: \DateTimeInterface|null, coveroffset: int|null, kf8_header: int|null}
      */
     protected function parseExth(\SplFileObject $f): array
     {
@@ -556,7 +556,7 @@ class MobiDriver extends AbstractDriver
     /**
      * @see https://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
      *
-     * @return array{records: array{data_offset: int, attributes: int, unique_id: string}[]}
+     * @return array{records: list<array{data_offset: int, attributes: int, unique_id: string}>}
      */
     protected function parsePalmDb(\SplFileObject $f): array
     {
@@ -637,7 +637,7 @@ class MobiDriver extends AbstractDriver
      * KF8 (AZW3) shares the MOBI container: the MOBI header version is 8 and a
      * skeleton index (SKEL) record number is present in the extended header.
      *
-     * @param array{records: array{data_offset: int, attributes: int, unique_id: string}[]} $palmDbData
+     * @param array{records: list<array{data_offset: int, attributes: int, unique_id: string}>} $palmDbData
      */
     protected function isKf8(\SplFileObject $f, array $palmDbData): bool
     {

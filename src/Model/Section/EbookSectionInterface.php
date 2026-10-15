@@ -37,7 +37,7 @@ interface EbookSectionInterface
      * Assets referenced by this section. Each Resource::getPath() matches the
      * reference used in getContent().
      *
-     * @return EbookResourceInterface[]
+     * @return list<EbookResourceInterface>
      */
     public function getResources(): array;
 }

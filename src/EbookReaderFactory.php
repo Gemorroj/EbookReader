@@ -34,7 +34,7 @@ final class EbookReaderFactory
         TextDecoderInterface $textDecoder = new TextDecoder(),
     ): EbookDriverInterface {
         if (!\is_readable($file)) {
-            throw new FileNotReadableException();
+            throw new FileNotReadableException(\sprintf('File "%s" is not readable', $file));
         }
 
         foreach (self::getCandidates($file, $mimeDetector, $textDecoder) as $driver) {
@@ -43,13 +43,13 @@ final class EbookReaderFactory
             }
         }
 
-        throw new UnsupportedFormatException();
+        throw new UnsupportedFormatException(\sprintf('Unsupported format: "%s"', $file));
     }
 
     /**
      * Cheap magic-bytes sniffing to order drivers and skip obviously incompatible ones.
      *
-     * @return EbookDriverInterface[]
+     * @return list<EbookDriverInterface>
      */
     private static function getCandidates(string $file, MimeDetectorInterface $mimeDetector, TextDecoderInterface $textDecoder): array
     {

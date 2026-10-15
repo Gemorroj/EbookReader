@@ -11,7 +11,7 @@ interface EbookMetaInterface
     /**
      * All authors as a list.
      *
-     * @return string[]
+     * @return list<string>
      */
     public function getAuthors(): array;
 
@@ -23,7 +23,7 @@ interface EbookMetaInterface
     /**
      * Subjects / genres as a list.
      *
-     * @return string[]
+     * @return list<string>
      */
     public function getSubjects(): array;
 

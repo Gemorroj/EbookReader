@@ -17,7 +17,7 @@ final class Index
     /**
      * @param callable(int): string $loadRecord loads a PDB record by index
      *
-     * @return array{entries: list<array{0: string, 1: array<int, int[]>}>, cncx: array<int, string>}
+     * @return array{entries: list<array{0: string, 1: array<int, list<int>>}>, cncx: array<int, string>}
      */
     public static function parse(int $indexOffset, callable $loadRecord, int $codec): array
     {
@@ -62,7 +62,7 @@ final class Index
      */
     public static function parseHeader(string $data): array
     {
-        if ('INDX' !== \substr($data, 0, 4)) {
+        if (!\str_starts_with($data, 'INDX')) {
             throw new ParserException();
         }
 
@@ -99,7 +99,7 @@ final class Index
     /**
      * @param list<array{0: int, 1: int, 2: int, 3: int}> $tagTable
      *
-     * @return list<array{0: string, 1: array<int, int[]>}>
+     * @return list<array{0: string, 1: array<int, list<int>>}>
      */
     private static function parseEntries(string $record, int $controlByteCount, array $tagTable, int $codec): array
     {
@@ -123,7 +123,7 @@ final class Index
     /**
      * @param list<array{0: int, 1: int, 2: int, 3: int}> $tagTable
      *
-     * @return array<int, int[]>
+     * @return array<int, list<int>>
      */
     private static function getTagMap(int $controlByteCount, array $tagTable, string $data, int $startPos): array
     {

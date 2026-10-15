@@ -133,7 +133,7 @@ final class Fb2DriverTest extends TestCase
     }
 
     /**
-     * @param Fb2Epigraph[] $expectedEpigraphs
+     * @param list<Fb2Epigraph> $expectedEpigraphs
      */
     #[DataProvider('filesDataProvider')]
     public function testGetData(

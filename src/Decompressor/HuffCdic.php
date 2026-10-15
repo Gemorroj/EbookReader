@@ -31,7 +31,7 @@ final class HuffCdic implements DecompressorInterface
     private array $maxcode = [];
 
     /**
-     * @var array<int, array{0: string, 1: int}|null>
+     * @var list<array{0: string, 1: int}>
      */
     private array $dictionary = [];
 
@@ -41,7 +41,7 @@ final class HuffCdic implements DecompressorInterface
     private array $expanding = [];
 
     /**
-     * @param string[] $records first record is HUFF, the rest are CDIC
+     * @param list<string> $records first record is HUFF, the rest are CDIC
      */
     public function __construct(array $records)
     {

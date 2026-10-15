@@ -20,21 +20,21 @@ interface EbookDriverInterface
     /**
      * Flat table of contents (level = nesting depth, starting at 1).
      *
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     public function getTableOfContents(): array;
 
     /**
      * Content sections.
      *
-     * @return EbookSectionInterface[]
+     * @return list<EbookSectionInterface>
      */
     public function getSections(): array;
 
     /**
      * All assets used by the book, de-duplicated by path.
      *
-     * @return EbookResourceInterface[]
+     * @return list<EbookResourceInterface>
      */
     public function getResources(): array;
 

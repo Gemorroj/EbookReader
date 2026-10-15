@@ -23,6 +23,9 @@ use EbookReader\Model\TableOfContents\TableOfContents;
  */
 final class TxtDriver extends AbstractDriver
 {
+    /**
+     * @var list<string>
+     */
     private const array TEXT_EXTENSIONS = ['txt', 'text', 'md', 'markdown', 'textile'];
 
     /**
@@ -30,7 +33,7 @@ final class TxtDriver extends AbstractDriver
      */
     private const string CHAPTER_PATTERN = '~^(?:chapters?|part|book|section|prologue|epilogue|foreword|preface|afterword|introduction|conclusion|глава|часть|книга|раздел|пролог|эпилог|предисловие|послесловие|введение|заключение)\b~iu';
 
-    /** @var string[] */
+    /** @var list<string> */
     protected array $coverFilenames = [
         'cover',
         'img',
@@ -59,7 +62,7 @@ final class TxtDriver extends AbstractDriver
     }
 
     /**
-     * @return TxtSection[]
+     * @return list<TxtSection>
      */
     #[\Override]
     public function getSections(): array
@@ -116,7 +119,7 @@ final class TxtDriver extends AbstractDriver
     }
 
     /**
-     * @return TableOfContents[]
+     * @return list<TableOfContents>
      */
     #[\Override]
     public function getTableOfContents(): array
@@ -219,7 +222,7 @@ final class TxtDriver extends AbstractDriver
     }
 
     /**
-     * @return string[] text entry names, naturally sorted
+     * @return list<string> text entry names, naturally sorted
      */
     private function textEntries(\ZipArchive $zip): array
     {

@@ -9,8 +9,8 @@ use EbookReader\Model\Resource\Resource as EbookResource;
 final readonly class Fb2Section implements EbookSectionInterface
 {
     /**
-     * @param Fb2Epigraph[]   $epigraphs
-     * @param EbookResource[] $resources
+     * @param list<Fb2Epigraph>   $epigraphs
+     * @param list<EbookResource> $resources
      */
     public function __construct(
         private string $id,
@@ -47,7 +47,7 @@ final readonly class Fb2Section implements EbookSectionInterface
     }
 
     /**
-     * @return EbookResource[]
+     * @return list<EbookResource>
      */
     #[\Override]
     public function getResources(): array
@@ -56,7 +56,7 @@ final readonly class Fb2Section implements EbookSectionInterface
     }
 
     /**
-     * @return Fb2Epigraph[]
+     * @return list<Fb2Epigraph>
      */
     public function getEpigraphs(): array
     {

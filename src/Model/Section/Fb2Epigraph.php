@@ -7,7 +7,7 @@ namespace EbookReader\Model\Section;
 final readonly class Fb2Epigraph
 {
     /**
-     * @param string[] $authors
+     * @param list<string> $authors
      */
     public function __construct(
         private string $text,
@@ -21,7 +21,7 @@ final readonly class Fb2Epigraph
     }
 
     /**
-     * @return string[]
+     * @return list<string>
      */
     public function getAuthors(): array
     {
